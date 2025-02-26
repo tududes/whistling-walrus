@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/public/mic.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Audio Recorder with Walrus Storage (Dev)</title>
+    <meta name="description" content="Record audio and store it on Walrus decentralized storage" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+
+    <!-- Load React from CDN -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+    <!-- Load Babel for JSX support -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Configure Tailwind -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        walrus: {
+                            dark: '#0d1117',      // Dark background
+                            darker: '#080b10',    // Even darker elements
+                            teal: '#7CFBFF',      // Teal accent for buttons and highlights
+                            purple: '#8F7CF1',    // Purple accent (from the .SITE part)
+                            text: '#ffffff',      // Primary text
+                            secondary: '#adb5bd',  // Secondary text/accents
+                            border: '#1E2A3B',    // Subtle borders
+                        }
+                    },
+                    fontFamily: {
+                        pixel: ['VT323', 'monospace'],
+                    }
+                },
+            },
+        }
+    </script>
+
+    <!-- Load Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body class="bg-walrus-dark">
+    <div id="root"></div>
+
+    <!-- Load the React component -->
+    <script type="text/babel" src="src/react-audio-recorder.jsx"></script>
+
+    <!-- Initialize the app -->
+    <script type="text/babel">
+        ReactDOM.createRoot(document.getElementById('root')).render(
+            <React.StrictMode>
+                <App />
+            </React.StrictMode>
+        );
+    </script>
+</body>
+
+</html>

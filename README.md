@@ -1,4 +1,4 @@
-# Walrus Audio Recorder
+# Whistling Walrus
 
 A Progressive Web App (PWA) for recording audio and storing it on Walrus decentralized storage.
 
@@ -146,6 +146,51 @@ Alternatively, you can deploy manually:
 wrangler pages publish dist
 ```
 
+### Updating the Cloudflare Instance
+
+When you make changes to the code and want to update the deployed application, follow these steps:
+
+1. Make and test your changes locally:
+
+```bash
+npm run dev
+```
+
+2. Once you're satisfied with the changes, build the updated application:
+
+```bash
+npm run build
+```
+
+3. Deploy the updated build to Cloudflare Pages:
+
+```bash
+npm run deploy
+```
+
+4. Verify your changes on the deployed site (typically available at `https://your-project-name.pages.dev`).
+
+### Continuous Deployment Workflow
+
+For a more efficient workflow when making frequent updates:
+
+1. Set up a Git repository for your project if you haven't already.
+2. Connect your Cloudflare Pages project to your Git repository:
+   - Log in to the Cloudflare dashboard
+   - Go to Pages > Your Project > Settings > Builds & deployments
+   - Connect to your Git provider (GitHub, GitLab, etc.)
+   - Select your repository
+
+3. Configure automatic deployments:
+   - Cloudflare will automatically build and deploy your application when you push changes to your repository
+   - You can configure which branches trigger deployments (e.g., only deploy from the `main` branch)
+
+4. With this setup, your workflow becomes:
+   - Make changes locally and test with `npm run dev`
+   - Commit your changes to your Git repository
+   - Push to your configured branch
+   - Cloudflare automatically builds and deploys your application
+
 ### Cloudflare Pages Configuration
 
 The project includes a `cloudflare-config.js` file with the following settings:
@@ -164,4 +209,4 @@ The project includes a `cloudflare-config.js` file with the following settings:
 
 ## License
 
-MIT 
+MIT
