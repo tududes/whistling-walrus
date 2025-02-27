@@ -75,22 +75,26 @@ body::after {
 @keyframes fadeInOut {
     0% {
         opacity: 0;
-        transform: translateY(-20px);
+        transform: translate(-50%, -30px);
     }
 
     10% {
         opacity: 1;
-        transform: translateY(0);
+        transform: translate(-50%, 5px);
+    }
+
+    15% {
+        transform: translate(-50%, 0);
     }
 
     90% {
         opacity: 1;
-        transform: translateY(0);
+        transform: translate(-50%, 0);
     }
 
     100% {
         opacity: 0;
-        transform: translateY(-20px);
+        transform: translate(-50%, -30px);
     }
 }
 

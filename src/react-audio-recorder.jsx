@@ -465,7 +465,7 @@ const AudioRecorder = () => {
 
         // Create a new blob with explicit MIME type for better mobile compatibility
         // iOS Safari has better support for MP3 than WAV
-        const mimeType = 'audio/mp3';
+        const mimeType = blob.type || 'audio/mp3';
         const newBlob = new Blob([blob], { type: mimeType });
         setAudioBlob(newBlob);
         console.log("Set audio blob with type:", mimeType);
@@ -481,16 +481,37 @@ const AudioRecorder = () => {
         // Explicitly set the MIME type
         audioRef.current.type = mimeType;
 
-        // Preload the audio - use 'metadata' for faster loading on mobile
-        audioRef.current.preload = 'metadata';
+        // Preload the audio - use 'auto' for better mobile compatibility
+        audioRef.current.preload = 'auto';
 
         // For iOS Safari, we need to set these attributes
         audioRef.current.controls = true;
         audioRef.current.crossOrigin = 'anonymous';
 
-        // Load the audio to trigger the loadedmetadata event
+        // Set playsinline attribute for iOS (important for mobile playback)
+        audioRef.current.playsInline = true;
+
+        // Force load the audio to ensure it's ready for playback
         audioRef.current.load();
         console.log("Loaded audio");
+
+        // Try to trigger a silent play to unlock audio on iOS
+        try {
+          const silentPlay = audioRef.current.play();
+          if (silentPlay !== undefined) {
+            silentPlay.then(() => {
+              // Immediately pause after unlocking
+              audioRef.current.pause();
+              audioRef.current.currentTime = 0;
+              console.log("Audio unlocked for iOS");
+            }).catch(e => {
+              // This is expected on first interaction
+              console.log("Silent play was prevented, will require user interaction:", e);
+            });
+          }
+        } catch (e) {
+          console.log("Silent play attempt failed:", e);
+        }
 
         // Update the URL hash to reflect the current recording
         window.location.hash = blobId;
@@ -631,22 +652,50 @@ const AudioRecorder = () => {
         // Reset the audio position
         audioRef.current.currentTime = 0;
 
+        // Set volume to ensure it's not muted
+        audioRef.current.volume = 1.0;
+
         // First set the playing state to true
         setIsPlaying(true);
 
         // Then start the audio playback
         console.log("Starting audio playback");
-        await audioRef.current.play();
-        console.log("Audio playback started successfully");
+        const playPromise = audioRef.current.play();
+
+        if (playPromise !== undefined) {
+          playPromise.then(() => {
+            console.log("Audio playback started successfully");
+          }).catch(playError => {
+            console.error("Autoplay prevented:", playError);
+            setIsPlaying(false);
+
+            // Show a more helpful message for mobile users
+            setErrorMessage("Please tap the play button again to start playback (mobile browser requires user interaction)");
+
+            // For iOS Safari, we need to ensure the audio is ready for the next tap
+            audioRef.current.load();
+
+            // Add a one-time click event listener to the document to help unlock audio
+            const unlockAudio = () => {
+              const newPlayPromise = audioRef.current.play();
+              if (newPlayPromise !== undefined) {
+                newPlayPromise.then(() => {
+                  setIsPlaying(true);
+                  console.log("Audio playback started on second attempt");
+                }).catch(err => {
+                  console.error("Still couldn't play audio:", err);
+                });
+              }
+              document.removeEventListener('click', unlockAudio);
+            };
+
+            document.addEventListener('click', unlockAudio, { once: true });
+          });
+        }
       } catch (playError) {
-        console.error("Autoplay prevented:", playError);
+        console.error("Error during playback attempt:", playError);
         setIsPlaying(false);
-
-        // Special handling for iOS Safari
-        setErrorMessage("Tap the play button again to start playback (mobile browser restriction)");
-
-        // Make sure the audio is loaded and ready for the next tap
-        audioRef.current.load();
+        setErrorMessage("Playback failed. Please try again.");
       }
     } catch (error) {
       console.error("Error playing recording:", error);
@@ -819,16 +868,16 @@ const AudioRecorder = () => {
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-4 relative">
+      {/* Toast notification - moved outside of the main container */}
+      {toast.visible && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-walrus-teal text-walrus-darker px-6 py-3 rounded-lg shadow-xl flex items-center animate-fade-in-out z-[9999] border-2 border-walrus-darker">
+          <Check className="w-5 h-5 mr-2" />
+          <span className="font-medium">{toast.message}</span>
+        </div>
+      )}
+
       {/* Main content container with semi-transparent background */}
       <div className="w-full max-w-3xl bg-black/60 backdrop-blur-sm p-6 rounded-xl shadow-2xl border border-walrus-teal/20">
-        {/* Toast notification */}
-        {toast.visible && (
-          <div className="fixed top-4 right-4 bg-walrus-teal text-walrus-darker px-4 py-2 rounded-lg shadow-lg flex items-center animate-fade-in-out z-50">
-            <Check className="w-4 h-4 mr-2" />
-            {toast.message}
-          </div>
-        )}
-
         <div
           className="flex items-center justify-center mb-8 cursor-pointer hover:opacity-80 transition-opacity"
           onClick={resetForNewRecording}
@@ -1122,8 +1171,9 @@ const AudioRecorder = () => {
           <div className="flex items-start">
             <Info className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0 text-walrus-secondary" />
             <span>
-              This application stores recordings on Walrus decentralized storage.
+              This application stores ephemeral recordings on Walrus decentralized storage.
               Recordings can be up to 30 minutes long and are stored in a compressed format for browser compatibility.
+              These ephemeral recordings will expire after 10 epochs on the Walrus blockchain.
             </span>
           </div>
           <div className="mt-2 flex items-center">
