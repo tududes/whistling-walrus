@@ -808,6 +808,9 @@ const AudioRecorder = () => {
   // Update the togglePlayback function to handle mobile browser limitations
   const togglePlayback = async () => {
     try {
+      // Ensure audio is initialized for Safari
+      initSafariAudio();
+
       // If already playing, just pause
       if (isPlaying) {
         console.log("Stopping playback");
@@ -817,96 +820,20 @@ const AudioRecorder = () => {
       }
 
       console.log("Starting playback");
-      setErrorMessage(""); // Clear any previous error messages
-
-      // If we don't have the audio blob yet but we have a blobId, fetch it
-      if ((!audioBlob || audioRef.current.src === '') && currentBlobId) {
-        console.log("No audio blob available or audio source not set, fetching it first");
-        await loadRecording(currentBlobId, true); // true means fetch the blob
-      } else if (!audioBlob && !currentBlobId) {
-        console.log("No audio blob available and no blobId");
-        setErrorMessage("No recording available to play");
-        return;
-      }
-
-      // At this point we should have a valid audio blob and source
-      if (!audioRef.current.src || audioRef.current.src === '') {
-        console.error("Audio source still not available after loading");
-        setErrorMessage("Could not load audio. Please try again.");
-        return;
-      }
-
-      // Reset position to beginning
-      audioRef.current.currentTime = 0;
-
-      // Ensure volume is set
-      audioRef.current.volume = 1.0;
-      audioRef.current.muted = false;
-
-      // Set playing state first
-      setIsPlaying(true);
-
-      // Play the audio with enhanced error handling
-      console.log("Playing audio");
+      // If paused, play
       try {
-        // Log audio element details before playing
-        console.log("Audio element details before play:", {
-          src: audioRef.current.src,
-          type: audioRef.current.type,
-          readyState: audioRef.current.readyState,
-          networkState: audioRef.current.networkState,
-          error: audioRef.current.error
-        });
+        await audioRef.current.play();
+        setIsPlaying(true);
 
-        await audioRef.current.play().catch(playError => {
-          console.error("Detailed play error:", {
-            name: playError.name,
-            message: playError.message,
-            code: playError.code,
-            stack: playError.stack
-          });
-          throw playError;
-        });
-
-        console.log("Audio playback started successfully");
-      } catch (playError) {
-        console.error("Error playing audio:", playError);
-
-        // Special handling for Safari's AbortError
-        if (playError.name === "AbortError") {
-          console.log("Detected Safari AbortError, trying alternative playback approach");
-
-          try {
-            // Create a new Audio element as a workaround
-            const tempAudio = new Audio();
-            tempAudio.src = audioRef.current.src;
-            tempAudio.type = 'audio/mp3';
-            tempAudio.crossOrigin = 'anonymous';
-            tempAudio.preload = 'auto';
-
-            // Set up event listeners
-            tempAudio.onplay = () => console.log("Temp audio started playing");
-            tempAudio.onerror = (e) => console.error("Temp audio error:", e);
-
-            // Try to play with the new element
-            await tempAudio.play();
-
-            // If successful, update our audio reference
-            audioRef.current = tempAudio;
-          } catch (altPlayError) {
-            console.error("Alternative playback also failed:", altPlayError);
-            setIsPlaying(false);
-            setErrorMessage("Playback failed. Please try again.");
-          }
-        } else {
-          setIsPlaying(false);
-          setErrorMessage("Playback failed. Please try again.");
-        }
+        // Handle when audio playback ends
+        audioRef.current.onended = handleAudioEnd;
+      } catch (error) {
+        console.error("Error playing audio:", error);
+        setErrorMessage("Could not play audio. Please try again.");
       }
     } catch (error) {
-      console.error("Error in togglePlayback:", error);
-      setIsPlaying(false);
-      setErrorMessage(`Playback error: ${error.message}`);
+      console.error("Error playing audio:", error);
+      setErrorMessage("Could not play audio. Please try again.");
     }
   };
 
@@ -928,6 +855,12 @@ const AudioRecorder = () => {
 
       // Clean up audio resources to ensure we're not using the previous recording
       await cleanupAudioResources();
+
+      // Initialize audio for Safari before trying to record
+      initSafariAudio();
+
+      // Small delay to ensure audio initialization completes
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       // Request microphone access
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -1254,6 +1187,9 @@ const AudioRecorder = () => {
       console.log("Playing recording:", blobId);
       setErrorMessage(""); // Clear any previous error messages
 
+      // Initialize audio specifically for Safari
+      initSafariAudio();
+
       // If already playing, stop first
       if (isPlaying) {
         audioRef.current.pause();
@@ -1358,7 +1294,50 @@ const AudioRecorder = () => {
       window.history.pushState("", document.title, window.location.pathname + window.location.search);
     }
 
+    // Ensure audio is initialized in Safari
+    initSafariAudio();
+
     console.log("Reset for new recording");
+  };
+
+  // Function to explicitly initialize audio for Safari
+  const initSafariAudio = () => {
+    // Check if we're running in Safari
+    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+
+    if (isSafari || true) { // Try for all browsers, but especially needed for Safari
+      console.log("Initializing audio specifically for Safari");
+
+      try {
+        // Create and immediately use an audio context
+        const tempContext = new (window.AudioContext || window.webkitAudioContext)();
+        const silentBuffer = tempContext.createBuffer(1, 1, 22050);
+        const source = tempContext.createBufferSource();
+        source.buffer = silentBuffer;
+        source.connect(tempContext.destination);
+        source.start(0);
+        setTimeout(() => {
+          if (tempContext.state !== "closed") {
+            source.disconnect();
+          }
+        }, 100);
+
+        // Also try to initialize our main audio element
+        const tempAudio = document.createElement('audio');
+        tempAudio.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV6urq6urq6urq6urq6urq6urq6urq6urq6v////////////////////////////////8AAAAATGF2YzU4LjU0AAAAAAAAAAAAAAAAJAAAAAAAAAAAASDs90hvAAAAAAAAAAAAAAAAAAAA//tUZAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV';
+        tempAudio.load();
+        const playPromise = tempAudio.play();
+        if (playPromise !== undefined) {
+          playPromise.then(() => {
+            tempAudio.remove();
+          }).catch(error => {
+            tempAudio.remove();
+          });
+        }
+      } catch (error) {
+        console.error("Safari audio initialization failed:", error);
+      }
+    }
   };
 
   // Add a useEffect to initialize audio context properly for mobile
@@ -1392,85 +1371,20 @@ const AudioRecorder = () => {
     };
   }, []);
 
-  // Add a useEffect to handle iOS Safari's specific requirements for audio playback
+  // Add an immediate initSafariAudio call when component mounts
   useEffect(() => {
-    // Function to enable audio playback on iOS Safari and other mobile browsers
-    const enableMobileAudio = () => {
-      console.log("Enabling audio for mobile browsers");
+    // Initialize Safari audio on component mount
+    initSafariAudio();
 
-      try {
-        // Create a silent audio context and play it
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const silentBuffer = audioContext.createBuffer(1, 1, 22050);
-        const source = audioContext.createBufferSource();
-        source.buffer = silentBuffer;
-        source.connect(audioContext.destination);
-        source.start(0);
-        source.disconnect();
-
-        // Create a temporary silent audio element and play it
-        const tempAudio = document.createElement('audio');
-        tempAudio.setAttribute('playsinline', '');
-        tempAudio.muted = true;
-        tempAudio.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV6urq6urq6urq6urq6urq6urq6urq6urq6v////////////////////////////////8AAAAATGF2YzU4LjU0AAAAAAAAAAAAAAAAJAAAAAAAAAAAASDs90hvAAAAAAAAAAAAAAAAAAAA//tUZAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV';
-        tempAudio.load();
-
-        const playPromise = tempAudio.play();
-        if (playPromise !== undefined) {
-          playPromise.then(() => {
-            console.log("Mobile audio unlocked");
-            tempAudio.remove();
-          }).catch(error => {
-            console.log("Mobile audio unlock failed, will try again on next interaction");
-            tempAudio.remove();
-          });
-        }
-
-        // Also try to unlock our main audio element
-        if (audioRef.current) {
-          // Save the current src
-          const currentSrc = audioRef.current.src;
-
-          // Set a silent source temporarily
-          audioRef.current.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV6urq6urq6urq6urq6urq6urq6urq6urq6v////////////////////////////////8AAAAATGF2YzU4LjU0AAAAAAAAAAAAAAAAJAAAAAAAAAAAASDs90hvAAAAAAAAAAAAAAAAAAAA//tUZAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV';
-          audioRef.current.load();
-
-          const mainPlayPromise = audioRef.current.play();
-          if (mainPlayPromise !== undefined) {
-            mainPlayPromise.then(() => {
-              console.log("Main audio element unlocked");
-              // Restore the original src or clear it
-              audioRef.current.pause();
-              audioRef.current.src = currentSrc || '';
-              audioRef.current.load();
-            }).catch(error => {
-              console.log("Main audio element unlock failed");
-              // Restore the original src or clear it
-              audioRef.current.src = currentSrc || '';
-              audioRef.current.load();
-            });
-          }
-        }
-      } catch (error) {
-        console.error("Error enabling mobile audio:", error);
-      }
-
-      // Remove the event listeners once we've tried to unlock audio
-      document.removeEventListener('touchstart', enableMobileAudio);
-      document.removeEventListener('touchend', enableMobileAudio);
-      document.removeEventListener('click', enableMobileAudio);
+    // Add it to a click listener as well, to ensure user interaction
+    const handleInitClick = () => {
+      initSafariAudio();
     };
 
-    // Add event listeners for user interaction
-    document.addEventListener('touchstart', enableMobileAudio, { once: true });
-    document.addEventListener('touchend', enableMobileAudio, { once: true });
-    document.addEventListener('click', enableMobileAudio, { once: true });
+    document.addEventListener('click', handleInitClick, { once: true });
 
     return () => {
-      // Clean up event listeners
-      document.removeEventListener('touchstart', enableMobileAudio);
-      document.removeEventListener('touchend', enableMobileAudio);
-      document.removeEventListener('click', enableMobileAudio);
+      document.removeEventListener('click', handleInitClick);
     };
   }, []);
 
