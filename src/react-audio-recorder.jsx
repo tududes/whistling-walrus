@@ -582,7 +582,7 @@ const AudioRecorder = () => {
     navigator.clipboard.writeText(shareLink)
       .then(() => {
         // Show toast instead of alert
-        setToast({ visible: true, message: 'Link copied to clipboard!' });
+        setToast({ visible: true, message: 'Link copied!' });
         // Hide toast after 3 seconds
         setTimeout(() => {
           setToast({ visible: false, message: '' });
