@@ -750,317 +750,320 @@ const AudioRecorder = () => {
   }, []);
 
   return (
-    <div className="max-w-4xl mx-auto p-6 bg-walrus-darker shadow-lg rounded-lg border border-walrus-border">
-      {/* Toast notification */}
-      {toast.visible && (
-        <div className="fixed top-4 right-4 bg-walrus-teal text-walrus-darker px-4 py-2 rounded-lg shadow-lg flex items-center animate-fade-in-out z-50">
-          <Check className="w-4 h-4 mr-2" />
-          {toast.message}
-        </div>
-      )}
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 relative">
+      {/* Main content container with semi-transparent background */}
+      <div className="w-full max-w-3xl bg-black/60 backdrop-blur-sm p-6 rounded-xl shadow-2xl border border-walrus-teal/20">
+        {/* Toast notification */}
+        {toast.visible && (
+          <div className="fixed top-4 right-4 bg-walrus-teal text-walrus-darker px-4 py-2 rounded-lg shadow-lg flex items-center animate-fade-in-out z-50">
+            <Check className="w-4 h-4 mr-2" />
+            {toast.message}
+          </div>
+        )}
 
-      <div
-        className="flex items-center justify-center mb-8 cursor-pointer hover:opacity-80 transition-opacity"
-        onClick={resetForNewRecording}
-        title="Click to start a new recording"
-      >
-        <div className="w-12 h-12 mr-3">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-full h-full">
-            <circle cx="12" cy="12" r="12" fill="#7CFBFF" />
-            <g transform="scale(0.6) translate(8, 8)">
-              {/* Walrus head */}
-              <path d="M12 4C6 4 3 8 3 14C3 19 7 20 12 20C17 20 21 19 21 14C21 8 18 4 12 4Z" fill="#7CFBFF" stroke="#000" strokeWidth="1" />
+        <div
+          className="flex items-center justify-center mb-8 cursor-pointer hover:opacity-80 transition-opacity"
+          onClick={resetForNewRecording}
+          title="Click to start a new recording"
+        >
+          <div className="w-12 h-12 mr-3">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-full h-full">
+              <circle cx="12" cy="12" r="12" fill="#7CFBFF" />
+              <g transform="scale(0.6) translate(8, 8)">
+                {/* Walrus head */}
+                <path d="M12 4C6 4 3 8 3 14C3 19 7 20 12 20C17 20 21 19 21 14C21 8 18 4 12 4Z" fill="#7CFBFF" stroke="#000" strokeWidth="1" />
 
-              {/* Sunglasses */}
-              <rect x="5" y="9" width="14" height="3" rx="0.5" fill="#000" />
-              <rect x="5" y="9" width="6" height="3" rx="0.5" fill="#000" />
-              <rect x="13" y="9" width="6" height="3" rx="0.5" fill="#000" />
-              <line x1="12" y1="9" x2="12" y2="12" stroke="#7CFBFF" strokeWidth="0.5" />
+                {/* Sunglasses */}
+                <rect x="5" y="9" width="14" height="3" rx="0.5" fill="#000" />
+                <rect x="5" y="9" width="6" height="3" rx="0.5" fill="#000" />
+                <rect x="13" y="9" width="6" height="3" rx="0.5" fill="#000" />
+                <line x1="12" y1="9" x2="12" y2="12" stroke="#7CFBFF" strokeWidth="0.5" />
 
-              {/* Whiskers */}
-              <line x1="5" y1="13" x2="2" y2="12" stroke="#000" strokeWidth="0.5" />
-              <line x1="5" y1="14" x2="2" y2="14" stroke="#000" strokeWidth="0.5" />
-              <line x1="5" y1="15" x2="2" y2="16" stroke="#000" strokeWidth="0.5" />
-              <line x1="19" y1="13" x2="22" y2="12" stroke="#000" strokeWidth="0.5" />
-              <line x1="19" y1="14" x2="22" y2="14" stroke="#000" strokeWidth="0.5" />
-              <line x1="19" y1="15" x2="22" y2="16" stroke="#000" strokeWidth="0.5" />
+                {/* Whiskers */}
+                <line x1="5" y1="13" x2="2" y2="12" stroke="#000" strokeWidth="0.5" />
+                <line x1="5" y1="14" x2="2" y2="14" stroke="#000" strokeWidth="0.5" />
+                <line x1="5" y1="15" x2="2" y2="16" stroke="#000" strokeWidth="0.5" />
+                <line x1="19" y1="13" x2="22" y2="12" stroke="#000" strokeWidth="0.5" />
+                <line x1="19" y1="14" x2="22" y2="14" stroke="#000" strokeWidth="0.5" />
+                <line x1="19" y1="15" x2="22" y2="16" stroke="#000" strokeWidth="0.5" />
 
-              {/* Tusks */}
-              <path d="M9 15C9 15 8 17 8 19C8 20 9 20 9 19C9 17 10 15 10 15" fill="#fff" stroke="#000" strokeWidth="0.5" />
-              <path d="M15 15C15 15 16 17 16 19C16 20 15 20 15 19C15 17 14 15 14 15" fill="#fff" stroke="#000" strokeWidth="0.5" />
+                {/* Tusks */}
+                <path d="M9 15C9 15 8 17 8 19C8 20 9 20 9 19C9 17 10 15 10 15" fill="#fff" stroke="#000" strokeWidth="0.5" />
+                <path d="M15 15C15 15 16 17 16 19C16 20 15 20 15 19C15 17 14 15 14 15" fill="#fff" stroke="#000" strokeWidth="0.5" />
 
-              {/* Nose */}
-              <ellipse cx="12" cy="14.5" rx="2.5" ry="1.8" fill="#000" />
+                {/* Nose */}
+                <ellipse cx="12" cy="14.5" rx="2.5" ry="1.8" fill="#000" />
 
-              {/* Music notes */}
-              <g transform="translate(18, 12) scale(0.6)">
-                {/* First note */}
-                <path d="M0,0 C1,-1 2,0 2,1 L2,5 C2,6 1,7 0,7 C-1,7 -2,6 -2,5 C-2,4 -1,3 0,3 Z" fill="#000" />
-                <line x1="2" y1="1" x2="2" y2="-3" stroke="#000" strokeWidth="0.8" />
-                <line x1="2" y1="-3" x2="3" y2="-4" stroke="#000" strokeWidth="0.8" />
-
-                {/* Second note */}
-                <g transform="translate(5, -3)">
+                {/* Music notes */}
+                <g transform="translate(18, 12) scale(0.6)">
+                  {/* First note */}
                   <path d="M0,0 C1,-1 2,0 2,1 L2,5 C2,6 1,7 0,7 C-1,7 -2,6 -2,5 C-2,4 -1,3 0,3 Z" fill="#000" />
                   <line x1="2" y1="1" x2="2" y2="-3" stroke="#000" strokeWidth="0.8" />
                   <line x1="2" y1="-3" x2="3" y2="-4" stroke="#000" strokeWidth="0.8" />
-                </g>
 
-                {/* Third note */}
-                <g transform="translate(10, -5)">
-                  <path d="M0,0 C1,-1 2,0 2,1 L2,5 C2,6 1,7 0,7 C-1,7 -2,6 -2,5 C-2,4 -1,3 0,3 Z" fill="#000" />
-                  <line x1="2" y1="1" x2="2" y2="-3" stroke="#000" strokeWidth="0.8" />
-                  <line x1="2" y1="-3" x2="3" y2="-4" stroke="#000" strokeWidth="0.8" />
-                </g>
+                  {/* Second note */}
+                  <g transform="translate(5, -3)">
+                    <path d="M0,0 C1,-1 2,0 2,1 L2,5 C2,6 1,7 0,7 C-1,7 -2,6 -2,5 C-2,4 -1,3 0,3 Z" fill="#000" />
+                    <line x1="2" y1="1" x2="2" y2="-3" stroke="#000" strokeWidth="0.8" />
+                    <line x1="2" y1="-3" x2="3" y2="-4" stroke="#000" strokeWidth="0.8" />
+                  </g>
 
-                {/* Fourth note - smaller */}
-                <g transform="translate(14, -2) scale(0.8)">
-                  <path d="M0,0 C1,-1 2,0 2,1 L2,5 C2,6 1,7 0,7 C-1,7 -2,6 -2,5 C-2,4 -1,3 0,3 Z" fill="#000" />
-                  <line x1="2" y1="1" x2="2" y2="-3" stroke="#000" strokeWidth="0.8" />
-                  <line x1="2" y1="-3" x2="3" y2="-4" stroke="#000" strokeWidth="0.8" />
+                  {/* Third note */}
+                  <g transform="translate(10, -5)">
+                    <path d="M0,0 C1,-1 2,0 2,1 L2,5 C2,6 1,7 0,7 C-1,7 -2,6 -2,5 C-2,4 -1,3 0,3 Z" fill="#000" />
+                    <line x1="2" y1="1" x2="2" y2="-3" stroke="#000" strokeWidth="0.8" />
+                    <line x1="2" y1="-3" x2="3" y2="-4" stroke="#000" strokeWidth="0.8" />
+                  </g>
+
+                  {/* Fourth note - smaller */}
+                  <g transform="translate(14, -2) scale(0.8)">
+                    <path d="M0,0 C1,-1 2,0 2,1 L2,5 C2,6 1,7 0,7 C-1,7 -2,6 -2,5 C-2,4 -1,3 0,3 Z" fill="#000" />
+                    <line x1="2" y1="1" x2="2" y2="-3" stroke="#000" strokeWidth="0.8" />
+                    <line x1="2" y1="-3" x2="3" y2="-4" stroke="#000" strokeWidth="0.8" />
+                  </g>
                 </g>
               </g>
-            </g>
-          </svg>
-        </div>
-        <h1 className="text-3xl font-pixel font-bold text-walrus-teal">WHISTLING WALRUS</h1>
-      </div>
-
-      {errorMessage && (
-        <div className="bg-red-900/20 border border-red-700 text-red-400 px-4 py-3 rounded-md relative mb-4">
-          <span className="block sm:inline">{errorMessage}</span>
-        </div>
-      )}
-
-      <div className="bg-walrus-dark border border-walrus-border p-6 rounded-lg mb-8 shadow-md">
-        <div className="flex justify-center items-center mb-6">
-          <div className="text-5xl font-pixel font-bold text-walrus-teal">
-            {formatTime(recordingTime)}
+            </svg>
           </div>
+          <h1 className="text-3xl font-pixel font-bold text-walrus-teal">WHISTLING WALRUS</h1>
         </div>
 
-        {/* Single Visualization Pane that switches between recording and playback */}
-        <div className="mb-6">
-          <h3 className="text-walrus-teal font-medium mb-2 text-center">
-            {isRecording ? "Recording Scope" : "Audio Scope"}
-          </h3>
-          <div className="mx-auto w-[250px] bg-walrus-darker border border-walrus-border rounded-md overflow-hidden">
-            {isRecording && mediaRecorderRef.current ? (
-              <LiveAudioVisualizer
-                mediaRecorder={mediaRecorderRef.current}
-                width={250}
-                height={100}
-                barWidth={3}
-                gap={1}
-                barColor="rgb(124, 251, 255)"
-                className="w-full h-24"
-                fftSize={2048}
-                minDecibels={-85}
-                maxDecibels={-10}
-                smoothingTimeConstant={0.6}
-              />
-            ) : audioBlob ? (
-              <div className="w-full h-24">
-                <AudioVisualizer
-                  blob={audioBlob}
+        {errorMessage && (
+          <div className="bg-red-900/20 border border-red-700 text-red-400 px-4 py-3 rounded-md relative mb-4">
+            <span className="block sm:inline">{errorMessage}</span>
+          </div>
+        )}
+
+        <div className="bg-walrus-dark border border-walrus-border p-6 rounded-lg mb-8 shadow-md">
+          <div className="flex justify-center items-center mb-6">
+            <div className="text-5xl font-pixel font-bold text-walrus-teal">
+              {formatTime(recordingTime)}
+            </div>
+          </div>
+
+          {/* Single Visualization Pane that switches between recording and playback */}
+          <div className="mb-6">
+            <h3 className="text-walrus-teal font-medium mb-2 text-center">
+              {isRecording ? "Recording Scope" : "Audio Scope"}
+            </h3>
+            <div className="mx-auto w-[250px] bg-walrus-darker border border-walrus-border rounded-md overflow-hidden">
+              {isRecording && mediaRecorderRef.current ? (
+                <LiveAudioVisualizer
+                  mediaRecorder={mediaRecorderRef.current}
                   width={250}
                   height={100}
                   barWidth={3}
                   gap={1}
-                  barColor="rgb(143, 124, 241)"
-                  barPlayedColor="rgb(124, 251, 255)"
-                  currentTime={currentPlaybackTime}
+                  barColor="rgb(124, 251, 255)"
+                  className="w-full h-24"
                   fftSize={2048}
                   minDecibels={-85}
                   maxDecibels={-10}
                   smoothingTimeConstant={0.6}
                 />
-              </div>
-            ) : (
-              <div className="w-full h-24 flex items-center justify-center text-walrus-teal/50">
-                {isLoadingBlob ? "Fetching iceburg tunes..." : "Sing to me, mighty one..."}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {!isLoadingBlob && (
-          <>
-            {/* First row of buttons */}
-            {audioBlob && !isRecording && (
-              <div className="flex justify-center mb-4">
-                <button
-                  onClick={togglePlayback}
-                  className="bg-walrus-purple/10 hover:bg-walrus-purple/20 text-walrus-purple border border-walrus-purple font-medium py-3 px-6 rounded-md flex items-center justify-center transition-colors mx-auto w-[250px]"
-                  disabled={uploading}
-                >
-                  {isPlaying ? <Pause className="mr-2" /> : <Play className="mr-2" />}
-                  {isPlaying ? 'Pause' : 'Play'}
-                </button>
-              </div>
-            )}
-
-            {/* Second row of buttons */}
-            <div className="flex justify-center mb-6">
-              {!isRecording ? (
-                <button
-                  onClick={startRecording}
-                  className="bg-walrus-teal/10 hover:bg-walrus-teal/20 text-walrus-teal border border-walrus-teal font-medium py-3 px-6 rounded-md flex items-center justify-center transition-colors mx-auto w-[250px]"
-                  disabled={uploading}
-                >
-                  <Mic className="mr-2" /> {audioBlob ? "Start New Recording" : "Start Recording"}
-                </button>
+              ) : audioBlob ? (
+                <div className="w-full h-24">
+                  <AudioVisualizer
+                    blob={audioBlob}
+                    width={250}
+                    height={100}
+                    barWidth={3}
+                    gap={1}
+                    barColor="rgb(143, 124, 241)"
+                    barPlayedColor="rgb(124, 251, 255)"
+                    currentTime={currentPlaybackTime}
+                    fftSize={2048}
+                    minDecibels={-85}
+                    maxDecibels={-10}
+                    smoothingTimeConstant={0.6}
+                  />
+                </div>
               ) : (
-                <button
-                  onClick={stopRecording}
-                  className="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500 font-medium py-3 px-6 rounded-md flex items-center justify-center transition-colors mx-auto w-[250px]"
-                >
-                  <Square className="mr-2" /> Stop Recording
-                </button>
+                <div className="w-full h-24 flex items-center justify-center text-walrus-teal/50">
+                  {isLoadingBlob ? "Fetching iceburg tunes..." : "Sing to me, mighty one..."}
+                </div>
               )}
             </div>
-          </>
-        )}
-
-        {audioBlob && !isRecording && !isLoadingBlob && (
-          <div className="flex justify-center">
-            <button
-              onClick={saveRecording}
-              className="bg-walrus-teal/10 hover:bg-walrus-teal/20 text-walrus-teal border border-walrus-teal font-medium py-2 px-6 rounded-md flex items-center justify-center transition-colors mx-auto w-[250px]"
-              disabled={uploading}
-            >
-              <Save className="mr-2" />
-              {uploading ? 'Saving...' : 'Save to Walrus'}
-            </button>
           </div>
-        )}
 
-        {shareLink && !isLoadingBlob && (
-          <div className="mt-6 p-4 bg-walrus-dark border border-walrus-border rounded-lg shadow-inner">
-            <h3 className="font-medium text-walrus-teal mb-2 flex items-center">
-              <Share2 className="mr-2" /> Shareable Link
-            </h3>
-            <div className="flex items-center">
-              <input
-                type="text"
-                value={shareLink}
-                readOnly
-                className="flex-grow p-2 border border-walrus-border rounded-md mr-2 text-sm bg-walrus-darker text-walrus-secondary"
-              />
+          {!isLoadingBlob && (
+            <>
+              {/* First row of buttons */}
+              {audioBlob && !isRecording && (
+                <div className="flex justify-center mb-4">
+                  <button
+                    onClick={togglePlayback}
+                    className="bg-walrus-purple/10 hover:bg-walrus-purple/20 text-walrus-purple border border-walrus-purple font-medium py-3 px-6 rounded-md flex items-center justify-center transition-colors mx-auto w-[250px]"
+                    disabled={uploading}
+                  >
+                    {isPlaying ? <Pause className="mr-2" /> : <Play className="mr-2" />}
+                    {isPlaying ? 'Pause' : 'Play'}
+                  </button>
+                </div>
+              )}
+
+              {/* Second row of buttons */}
+              <div className="flex justify-center mb-6">
+                {!isRecording ? (
+                  <button
+                    onClick={startRecording}
+                    className="bg-walrus-teal/10 hover:bg-walrus-teal/20 text-walrus-teal border border-walrus-teal font-medium py-3 px-6 rounded-md flex items-center justify-center transition-colors mx-auto w-[250px]"
+                    disabled={uploading}
+                  >
+                    <Mic className="mr-2" /> {audioBlob ? "Start New Recording" : "Start Recording"}
+                  </button>
+                ) : (
+                  <button
+                    onClick={stopRecording}
+                    className="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500 font-medium py-3 px-6 rounded-md flex items-center justify-center transition-colors mx-auto w-[250px]"
+                  >
+                    <Square className="mr-2" /> Stop Recording
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+
+          {audioBlob && !isRecording && !isLoadingBlob && (
+            <div className="flex justify-center">
               <button
-                onClick={copyShareLink}
-                className="bg-walrus-teal/10 hover:bg-walrus-teal/20 text-walrus-teal border border-walrus-teal font-medium py-2 px-4 rounded-md transition-colors"
+                onClick={saveRecording}
+                className="bg-walrus-teal/10 hover:bg-walrus-teal/20 text-walrus-teal border border-walrus-teal font-medium py-2 px-6 rounded-md flex items-center justify-center transition-colors mx-auto w-[250px]"
+                disabled={uploading}
               >
-                Copy
+                <Save className="mr-2" />
+                {uploading ? 'Saving...' : 'Save to Walrus'}
               </button>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Add blockchain data display */}
-        {blockchainData && !isLoadingBlob && (
-          <div className="mt-4">
-            <button
-              onClick={() => setShowBlockchainData(!showBlockchainData)}
-              className="flex items-center justify-between w-full p-3 bg-walrus-darker border border-walrus-border rounded-md text-walrus-teal hover:bg-walrus-dark/50 transition-colors"
-            >
-              <span className="flex items-center">
-                <Info className="w-4 h-4 mr-2" />
-                Walrus Blockchain Storage Information
-              </span>
-              <span>{showBlockchainData ? '▲' : '▼'}</span>
-            </button>
-
-            {showBlockchainData && (
-              <div className="mt-2 p-4 bg-walrus-darker border border-walrus-border rounded-md overflow-auto">
-                <div className="text-xs font-mono text-walrus-secondary whitespace-pre overflow-x-auto max-h-60">
-                  {formatJSON(blockchainData)}
-                </div>
-                <div className="mt-3 text-xs text-walrus-secondary">
-                  <p>This is the raw response from the Walrus blockchain after storing your recording.</p>
-                  <p className="mt-1">The <code className="bg-walrus-dark/50 px-1 rounded">blobId</code> is a unique identifier for your recording on the decentralized storage network.</p>
-
-                  {/* Add Walrus Explorer Link */}
-                  {(blockchainData.newlyCreated?.blobObject?.blobId || blockchainData.alreadyCertified?.blobId) && (
-                    <div className="mt-3 pt-3 border-t border-walrus-border">
-                      <a
-                        href={`https://walruscan.com/testnet/blob/${blockchainData.newlyCreated?.blobObject?.blobId || blockchainData.alreadyCertified?.blobId}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center justify-center px-4 py-2 bg-walrus-teal/10 hover:bg-walrus-teal/20 text-walrus-teal border border-walrus-teal rounded-full transition-colors"
-                      >
-                        <ExternalLink className="w-4 h-4 mr-2" />
-                        View on Walrus Explorer
-                      </a>
-                    </div>
-                  )}
-                </div>
+          {shareLink && !isLoadingBlob && (
+            <div className="mt-6 p-4 bg-walrus-dark border border-walrus-border rounded-lg shadow-inner">
+              <h3 className="font-medium text-walrus-teal mb-2 flex items-center">
+                <Share2 className="mr-2" /> Shareable Link
+              </h3>
+              <div className="flex items-center">
+                <input
+                  type="text"
+                  value={shareLink}
+                  readOnly
+                  className="flex-grow p-2 border border-walrus-border rounded-md mr-2 text-sm bg-walrus-darker text-walrus-secondary"
+                />
+                <button
+                  onClick={copyShareLink}
+                  className="bg-walrus-teal/10 hover:bg-walrus-teal/20 text-walrus-teal border border-walrus-teal font-medium py-2 px-4 rounded-md transition-colors"
+                >
+                  Copy
+                </button>
               </div>
-            )}
-          </div>
-        )}
-      </div>
+            </div>
+          )}
 
-      <div className="mt-8">
-        <h2 className="text-xl font-pixel mb-4 flex items-center text-walrus-teal">
-          <List className="mr-2" /> Recent Recordings
-        </h2>
+          {/* Add blockchain data display */}
+          {blockchainData && !isLoadingBlob && (
+            <div className="mt-4">
+              <button
+                onClick={() => setShowBlockchainData(!showBlockchainData)}
+                className="flex items-center justify-between w-full p-3 bg-walrus-darker border border-walrus-border rounded-md text-walrus-teal hover:bg-walrus-dark/50 transition-colors"
+              >
+                <span className="flex items-center">
+                  <Info className="w-4 h-4 mr-2" />
+                  Walrus Blockchain Storage Information
+                </span>
+                <span>{showBlockchainData ? '▲' : '▼'}</span>
+              </button>
 
-        {recordings.length > 0 ? (
-          <div className="space-y-3">
-            {recordings.map((recording) => (
-              <div key={recording.id} className="bg-walrus-dark border border-walrus-border p-4 rounded-lg flex items-center justify-between shadow-md">
-                <div>
-                  <h3 className="font-medium text-walrus-text">{recording.name}</h3>
-                  <div className="text-sm text-walrus-secondary flex items-center">
-                    <Clock className="w-4 h-4 mr-1" /> {formatTime(recording.duration)}
+              {showBlockchainData && (
+                <div className="mt-2 p-4 bg-walrus-darker border border-walrus-border rounded-md overflow-auto">
+                  <div className="text-xs font-mono text-walrus-secondary whitespace-pre overflow-x-auto max-h-60">
+                    {formatJSON(blockchainData)}
+                  </div>
+                  <div className="mt-3 text-xs text-walrus-secondary">
+                    <p>This is the raw response from the Walrus blockchain after storing your recording.</p>
+                    <p className="mt-1">The <code className="bg-walrus-dark/50 px-1 rounded">blobId</code> is a unique identifier for your recording on the decentralized storage network.</p>
+
+                    {/* Add Walrus Explorer Link */}
+                    {(blockchainData.newlyCreated?.blobObject?.blobId || blockchainData.alreadyCertified?.blobId) && (
+                      <div className="mt-3 pt-3 border-t border-walrus-border">
+                        <a
+                          href={`https://walruscan.com/testnet/blob/${blockchainData.newlyCreated?.blobObject?.blobId || blockchainData.alreadyCertified?.blobId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center justify-center px-4 py-2 bg-walrus-teal/10 hover:bg-walrus-teal/20 text-walrus-teal border border-walrus-teal rounded-full transition-colors"
+                        >
+                          <ExternalLink className="w-4 h-4 mr-2" />
+                          View on Walrus Explorer
+                        </a>
+                      </div>
+                    )}
                   </div>
                 </div>
-                <div className="flex space-x-2">
-                  <button
-                    onClick={() => playRecording(recording.blobId)}
-                    className="bg-walrus-purple/10 hover:bg-walrus-purple/20 text-walrus-purple border border-walrus-purple p-2 rounded-md transition-colors"
-                    title="Play"
-                  >
-                    <Play className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => deleteRecording(recording.id)}
-                    className="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500 p-2 rounded-md transition-colors"
-                    title="Delete"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-walrus-secondary text-center py-8 border border-walrus-border rounded-lg bg-walrus-dark shadow-inner font-medium">
-            No recordings yet
-          </p>
-        )}
-      </div>
+              )}
+            </div>
+          )}
+        </div>
 
-      <footer className="mt-12 pt-6 border-t border-walrus-border text-sm text-walrus-secondary">
-        <div className="flex items-start">
-          <Info className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0 text-walrus-secondary" />
-          <span>
-            This application stores recordings on Walrus decentralized storage.
-            Recordings can be up to 30 minutes long and are stored in a compressed format for browser compatibility.
-          </span>
+        <div className="mt-8">
+          <h2 className="text-xl font-pixel mb-4 flex items-center text-walrus-teal">
+            <List className="mr-2" /> Recent Recordings
+          </h2>
+
+          {recordings.length > 0 ? (
+            <div className="space-y-3">
+              {recordings.map((recording) => (
+                <div key={recording.id} className="bg-walrus-dark border border-walrus-border p-4 rounded-lg flex items-center justify-between shadow-md">
+                  <div>
+                    <h3 className="font-medium text-walrus-text">{recording.name}</h3>
+                    <div className="text-sm text-walrus-secondary flex items-center">
+                      <Clock className="w-4 h-4 mr-1" /> {formatTime(recording.duration)}
+                    </div>
+                  </div>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => playRecording(recording.blobId)}
+                      className="bg-walrus-purple/10 hover:bg-walrus-purple/20 text-walrus-purple border border-walrus-purple p-2 rounded-md transition-colors"
+                      title="Play"
+                    >
+                      <Play className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => deleteRecording(recording.id)}
+                      className="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500 p-2 rounded-md transition-colors"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-walrus-secondary text-center py-8 border border-walrus-border rounded-lg bg-walrus-dark shadow-inner font-medium">
+              No recordings yet
+            </p>
+          )}
         </div>
-        <div className="mt-2 flex items-center">
-          <a
-            href="https://docs.walrus.site"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-walrus-teal hover:text-walrus-teal/80 flex items-center transition-colors"
-          >
-            Learn more about Walrus Storage <ExternalLink className="w-3 h-3 ml-1" />
-          </a>
-        </div>
-      </footer>
+
+        <footer className="mt-12 pt-6 border-t border-walrus-border text-sm text-walrus-secondary">
+          <div className="flex items-start">
+            <Info className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0 text-walrus-secondary" />
+            <span>
+              This application stores recordings on Walrus decentralized storage.
+              Recordings can be up to 30 minutes long and are stored in a compressed format for browser compatibility.
+            </span>
+          </div>
+          <div className="mt-2 flex items-center">
+            <a
+              href="https://docs.walrus.site"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-walrus-teal hover:text-walrus-teal/80 flex items-center transition-colors"
+            >
+              Learn more about Walrus Storage <ExternalLink className="w-3 h-3 ml-1" />
+            </a>
+          </div>
+        </footer>
+      </div>
     </div>
   );
 };
@@ -1068,7 +1071,7 @@ const AudioRecorder = () => {
 // Main App component
 const App = () => {
   return (
-    <div className="min-h-screen bg-walrus-dark py-8">
+    <div className="min-h-screen py-8">
       <AudioRecorder />
     </div>
   );

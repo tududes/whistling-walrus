@@ -9,6 +9,55 @@ body {
         sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    background-color: #0a0b1a;
+    position: relative;
+    overflow-x: hidden;
+    color: white;
+}
+
+/* Grid background */
+body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image:
+        linear-gradient(to right, rgba(124, 251, 255, 0.3) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(124, 251, 255, 0.15) 1px, transparent 1px);
+    background-size: 60px 60px;
+    background-position: center center;
+    z-index: -1;
+    transform-origin: center bottom;
+    transform: rotateX(60deg) translateY(-20%) scale(2.5);
+    box-shadow: 0 0 70px rgba(124, 251, 255, 0.2) inset;
+    animation: gridPulse 15s infinite alternate ease-in-out;
+}
+
+/* Add a subtle glow to the grid */
+body::after {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle at center, rgba(124, 251, 255, 0.05) 0%, rgba(10, 11, 26, 0.7) 70%, rgba(10, 11, 26, 0.9) 100%);
+    z-index: -1;
+}
+
+/* Subtle grid animation */
+@keyframes gridPulse {
+    0% {
+        opacity: 0.8;
+        background-size: 60px 60px;
+    }
+
+    100% {
+        opacity: 1;
+        background-size: 65px 65px;
+    }
 }
 
 /* Add animation for toast notification */
