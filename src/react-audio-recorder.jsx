@@ -777,7 +777,7 @@ const AudioRecorder = () => {
   }, []);
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4 relative">
+    <div className="flex-1 flex flex-col items-center justify-center p-4 relative">
       {/* Main content container with semi-transparent background */}
       <div className="w-full max-w-3xl bg-black/60 backdrop-blur-sm p-6 rounded-xl shadow-2xl border border-walrus-teal/20">
         {/* Toast notification */}
@@ -1008,27 +1008,27 @@ const AudioRecorder = () => {
 
               {showBlockchainData && (
                 <div className="mt-2 p-4 bg-walrus-darker border border-walrus-border rounded-md overflow-auto">
+                  {/* Add Walrus Explorer Link above the JSON data */}
+                  {(blockchainData.newlyCreated?.blobObject?.blobId || blockchainData.alreadyCertified?.blobId) && (
+                    <div className="mb-4 pb-3 border-b border-walrus-border">
+                      <a
+                        href={`https://walruscan.com/testnet/blob/${blockchainData.newlyCreated?.blobObject?.blobId || blockchainData.alreadyCertified?.blobId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center justify-center px-4 py-2 bg-walrus-teal/10 hover:bg-walrus-teal/20 text-walrus-teal border border-walrus-teal rounded-full transition-colors"
+                      >
+                        <ExternalLink className="w-4 h-4 mr-2" />
+                        View on Walrus Explorer
+                      </a>
+                    </div>
+                  )}
+
                   <div className="text-xs font-mono text-walrus-secondary whitespace-pre overflow-x-auto max-h-60">
                     {formatJSON(blockchainData)}
                   </div>
                   <div className="mt-3 text-xs text-walrus-secondary">
                     <p>This is the raw response from the Walrus blockchain after storing your recording.</p>
                     <p className="mt-1">The <code className="bg-walrus-dark/50 px-1 rounded">blobId</code> is a unique identifier for your recording on the decentralized storage network.</p>
-
-                    {/* Add Walrus Explorer Link */}
-                    {(blockchainData.newlyCreated?.blobObject?.blobId || blockchainData.alreadyCertified?.blobId) && (
-                      <div className="mt-3 pt-3 border-t border-walrus-border">
-                        <a
-                          href={`https://walruscan.com/testnet/blob/${blockchainData.newlyCreated?.blobObject?.blobId || blockchainData.alreadyCertified?.blobId}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center justify-center px-4 py-2 bg-walrus-teal/10 hover:bg-walrus-teal/20 text-walrus-teal border border-walrus-teal rounded-full transition-colors"
-                        >
-                          <ExternalLink className="w-4 h-4 mr-2" />
-                          View on Walrus Explorer
-                        </a>
-                      </div>
-                    )}
                   </div>
                 </div>
               )}
@@ -1104,7 +1104,7 @@ const AudioRecorder = () => {
 // Main App component
 const App = () => {
   return (
-    <div className="min-h-screen py-8">
+    <div className="min-h-screen h-full flex flex-col py-8">
       <AudioRecorder />
     </div>
   );
