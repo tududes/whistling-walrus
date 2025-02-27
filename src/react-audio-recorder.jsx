@@ -997,7 +997,7 @@ const AudioRecorder = () => {
                 </div>
               ) : (
                 <div className="w-full h-24 flex items-center justify-center text-walrus-teal/50">
-                  {isLoadingBlob ? "Fetching iceburg tunes..." : "Sing to me, mighty one..."}
+                  {isLoadingBlob ? "Fetching iceburg tunes..." : "Sing to me, darling..."}
                 </div>
               )}
             </div>
