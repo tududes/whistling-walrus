@@ -9,7 +9,7 @@ import { AudioVisualizer, LiveAudioVisualizer } from 'react-audio-visualize';
 // Configuration for Walrus endpoints
 const WALRUS_PUBLISHER_URL = "https://publisher.walrus-testnet.walrus.space";
 const WALRUS_AGGREGATOR_URL = "https://aggregator.walrus-testnet.walrus.space";
-const DEFAULT_STORAGE_EPOCHS = 10; // Number of epochs to store the recording
+const DEFAULT_STORAGE_EPOCHS = 30; // Number of epochs to store the recording
 
 /**
  * @typedef {Object} Recording
@@ -1787,6 +1787,15 @@ const AudioRecorder = () => {
                     >
                       <Play className="w-4 h-4" />
                     </button>
+                    <a
+                      href={`https://walruscan.com/testnet/blob/${recording.blobId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="bg-walrus-teal/10 hover:bg-walrus-teal/20 text-walrus-teal border border-walrus-teal p-2 rounded-md transition-colors"
+                      title="View on Walrus Explorer"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
                     <button
                       onClick={() => deleteRecording(recording.id)}
                       className="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500 p-2 rounded-md transition-colors"
@@ -1811,7 +1820,7 @@ const AudioRecorder = () => {
             <span>
               This application stores ephemeral recordings on Walrus decentralized storage.
               Recordings can be up to 30 minutes long and are stored in a compressed format for browser compatibility.
-              These ephemeral recordings will expire after 10 epochs on the Walrus blockchain.
+              These ephemeral recordings will expire after 30 epochs on the Walrus blockchain.
             </span>
           </div>
           <div className="mt-2 flex items-center">
