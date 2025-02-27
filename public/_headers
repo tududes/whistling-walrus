@@ -1,0 +1,15 @@
+# Cache control headers for Whistling Walrus PWA
+
+# PWA assets - allow caching
+/icons/*
+  Cache-Control: public, max-age=86400
+
+/manifest.json
+  Cache-Control: public, max-age=3600
+
+# All other resources - disable caching
+/*
+  Cache-Control: no-store, no-cache, must-revalidate, proxy-revalidate
+  Pragma: no-cache
+  Expires: 0
+  Surrogate-Control: no-store 

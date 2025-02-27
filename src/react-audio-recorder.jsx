@@ -776,6 +776,47 @@ const AudioRecorder = () => {
     };
   }, []);
 
+  // Add this function after the useEffect hooks to clear browser cache and storage except for recordings
+  // Function to clear browser cache and storage except for recordings
+  const clearBrowserCache = () => {
+    // Save the recordings data temporarily
+    const savedRecordings = localStorage.getItem('recordings');
+
+    try {
+      // Clear localStorage except for recordings
+      localStorage.clear();
+      if (savedRecordings) {
+        localStorage.setItem('recordings', savedRecordings);
+      }
+
+      // Clear sessionStorage
+      sessionStorage.clear();
+
+      // Clear cache via service worker if available
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({
+          type: 'CLEAR_CACHE'
+        });
+      }
+
+      console.log('Browser cache and storage cleared except for recordings');
+    } catch (error) {
+      console.error('Error clearing browser cache:', error);
+    }
+  };
+
+  // Call clearBrowserCache on component mount
+  useEffect(() => {
+    clearBrowserCache();
+
+    // Set up an interval to clear cache periodically (every 30 minutes)
+    const cacheCleanupInterval = setInterval(clearBrowserCache, 30 * 60 * 1000);
+
+    return () => {
+      clearInterval(cacheCleanupInterval);
+    };
+  }, []);
+
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-4 relative">
       {/* Main content container with semi-transparent background */}
