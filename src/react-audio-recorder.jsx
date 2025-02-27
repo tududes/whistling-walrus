@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 // Import Lucide icons properly
 import { Mic, Square, Play, Pause, Share2, Clock, Save, Trash2, List, Info, ExternalLink, Check } from 'lucide-react';
+// Import custom WalrusIcon
+import WalrusIcon from './WalrusIcon';
 // Import react-audio-visualize components
 import { AudioVisualizer, LiveAudioVisualizer } from 'react-audio-visualize';
 
@@ -45,6 +47,8 @@ const AudioRecorder = () => {
   const [showBlockchainData, setShowBlockchainData] = useState(false);
   // Add state for toast notification
   const [toast, setToast] = useState({ visible: false, message: '' });
+  // Add loading state for blob fetching
+  const [isLoadingBlob, setIsLoadingBlob] = useState(false);
 
   // Remove the old visualization data states
   // const [visualizationData, setVisualizationData] = useState([]);
@@ -92,12 +96,24 @@ const AudioRecorder = () => {
       setIsPlaying(false);
     };
 
+    // Add event listener for loadedmetadata to get audio duration
+    const handleLoadedMetadata = () => {
+      if (audioRef.current && audioRef.current.duration) {
+        // Round to nearest second for consistency with recording timer
+        const durationInSeconds = Math.round(audioRef.current.duration);
+        setRecordingTime(durationInSeconds);
+        console.log("Audio duration loaded:", durationInSeconds);
+      }
+    };
+
     audioRef.current.addEventListener('ended', handleAudioEnd);
+    audioRef.current.addEventListener('loadedmetadata', handleLoadedMetadata);
 
     return () => {
       // Clean up timer and audio listeners on component unmount
       if (timerRef.current) clearInterval(timerRef.current);
       audioRef.current.removeEventListener('ended', handleAudioEnd);
+      audioRef.current.removeEventListener('loadedmetadata', handleLoadedMetadata);
 
       // Clean up audio resources
       // Remove this call to the deleted function
@@ -265,6 +281,14 @@ const AudioRecorder = () => {
       setErrorMessage("");
       audioChunksRef.current = [];
 
+      // Clear the URL hash if it exists
+      if (window.location.hash) {
+        window.history.pushState("", document.title, window.location.pathname + window.location.search);
+      }
+
+      // Clean up audio resources to ensure we're not using the previous recording
+      await cleanupAudioResources();
+
       // Request microphone access
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
@@ -285,6 +309,15 @@ const AudioRecorder = () => {
         // Change from WAV to MP3 or WebM for better mobile compatibility
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/mp3' });
         setAudioBlob(audioBlob);
+
+        // Set up the audio element with the new blob
+        if (audioRef.current.src) {
+          URL.revokeObjectURL(audioRef.current.src);
+        }
+        const audioUrl = URL.createObjectURL(audioBlob);
+        audioRef.current.src = audioUrl;
+        audioRef.current.type = 'audio/mp3';
+        audioRef.current.load();
       };
 
       // Start recording with data available every 100ms
@@ -409,6 +442,8 @@ const AudioRecorder = () => {
     try {
       console.log("Loading recording:", blobId);
       setErrorMessage("");
+      // Set loading state to true
+      setIsLoadingBlob(true);
 
       // Stop current playback if any
       if (isPlaying) {
@@ -452,6 +487,8 @@ const AudioRecorder = () => {
         // For iOS Safari, we need to set these attributes
         audioRef.current.controls = true;
         audioRef.current.crossOrigin = 'anonymous';
+
+        // Load the audio to trigger the loadedmetadata event
         audioRef.current.load();
         console.log("Loaded audio");
 
@@ -468,22 +505,24 @@ const AudioRecorder = () => {
           if (metadataResponse.ok) {
             const metadata = await metadataResponse.json();
             setBlockchainData(metadata);
-            setShowBlockchainData(true);
           }
-        } catch (metadataError) {
-          console.error("Error fetching blockchain metadata:", metadataError);
-          // Don't show an error to the user, just don't display blockchain data
-          setBlockchainData(null);
-          setShowBlockchainData(false);
+        } catch (error) {
+          console.error("Error fetching blockchain metadata:", error);
         }
 
-        console.log("Recording loaded and ready for playback");
+        // Set loading state to false after everything is loaded
+        setIsLoadingBlob(false);
       } else {
-        throw new Error("Failed to load recording");
+        console.error("Failed to fetch recording:", response.status);
+        setErrorMessage(`Failed to load recording (${response.status}). Please try again.`);
+        // Set loading state to false on error
+        setIsLoadingBlob(false);
       }
     } catch (error) {
       console.error("Error loading recording:", error);
-      setErrorMessage("Failed to load recording from storage");
+      setErrorMessage(`Error loading recording: ${error.message}`);
+      // Set loading state to false on error
+      setIsLoadingBlob(false);
     }
   };
 
@@ -525,8 +564,10 @@ const AudioRecorder = () => {
 
     // Load recording from either source
     if (recordingId) {
+      setIsLoadingBlob(true);
       loadRecording(recordingId);
     } else if (hashId && hashId.length > 0) {
+      setIsLoadingBlob(true);
       loadRecording(hashId);
     }
   }, []);
@@ -724,9 +765,62 @@ const AudioRecorder = () => {
         title="Click to start a new recording"
       >
         <div className="w-12 h-12 mr-3">
-          <svg viewBox="0 0 24 24" className="w-full h-full">
-            <path d="M12 2C8.14 2 5 5.14 5 9v7.4c0 2.63 3.58 3.46 7 3.46s7-.82 7-3.46V9c0-3.86-3.14-7-7-7zm.3 18c-2.99 0-5.3-.82-5.3-1.6V17h10.6v1.4c0 .78-2.31 1.6-5.3 1.6zm6.1-3H5.6v-4.4h12.8V17zM12 4c3.2 0 5.8 2.6 5.8 5.8v1.2H6.2V9.8C6.2 6.6 8.8 4 12 4z"
-              fill="#7CFBFF" />
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-full h-full">
+            <circle cx="12" cy="12" r="12" fill="#7CFBFF" />
+            <g transform="scale(0.6) translate(8, 8)">
+              {/* Walrus head */}
+              <path d="M12 4C6 4 3 8 3 14C3 19 7 20 12 20C17 20 21 19 21 14C21 8 18 4 12 4Z" fill="#7CFBFF" stroke="#000" strokeWidth="1" />
+
+              {/* Sunglasses */}
+              <rect x="5" y="9" width="14" height="3" rx="0.5" fill="#000" />
+              <rect x="5" y="9" width="6" height="3" rx="0.5" fill="#000" />
+              <rect x="13" y="9" width="6" height="3" rx="0.5" fill="#000" />
+              <line x1="12" y1="9" x2="12" y2="12" stroke="#7CFBFF" strokeWidth="0.5" />
+
+              {/* Whiskers */}
+              <line x1="5" y1="13" x2="2" y2="12" stroke="#000" strokeWidth="0.5" />
+              <line x1="5" y1="14" x2="2" y2="14" stroke="#000" strokeWidth="0.5" />
+              <line x1="5" y1="15" x2="2" y2="16" stroke="#000" strokeWidth="0.5" />
+              <line x1="19" y1="13" x2="22" y2="12" stroke="#000" strokeWidth="0.5" />
+              <line x1="19" y1="14" x2="22" y2="14" stroke="#000" strokeWidth="0.5" />
+              <line x1="19" y1="15" x2="22" y2="16" stroke="#000" strokeWidth="0.5" />
+
+              {/* Tusks */}
+              <path d="M9 15C9 15 8 17 8 19C8 20 9 20 9 19C9 17 10 15 10 15" fill="#fff" stroke="#000" strokeWidth="0.5" />
+              <path d="M15 15C15 15 16 17 16 19C16 20 15 20 15 19C15 17 14 15 14 15" fill="#fff" stroke="#000" strokeWidth="0.5" />
+
+              {/* Nose */}
+              <ellipse cx="12" cy="14.5" rx="2.5" ry="1.8" fill="#000" />
+
+              {/* Music notes */}
+              <g transform="translate(18, 12) scale(0.6)">
+                {/* First note */}
+                <path d="M0,0 C1,-1 2,0 2,1 L2,5 C2,6 1,7 0,7 C-1,7 -2,6 -2,5 C-2,4 -1,3 0,3 Z" fill="#000" />
+                <line x1="2" y1="1" x2="2" y2="-3" stroke="#000" strokeWidth="0.8" />
+                <line x1="2" y1="-3" x2="3" y2="-4" stroke="#000" strokeWidth="0.8" />
+
+                {/* Second note */}
+                <g transform="translate(5, -3)">
+                  <path d="M0,0 C1,-1 2,0 2,1 L2,5 C2,6 1,7 0,7 C-1,7 -2,6 -2,5 C-2,4 -1,3 0,3 Z" fill="#000" />
+                  <line x1="2" y1="1" x2="2" y2="-3" stroke="#000" strokeWidth="0.8" />
+                  <line x1="2" y1="-3" x2="3" y2="-4" stroke="#000" strokeWidth="0.8" />
+                </g>
+
+                {/* Third note */}
+                <g transform="translate(10, -5)">
+                  <path d="M0,0 C1,-1 2,0 2,1 L2,5 C2,6 1,7 0,7 C-1,7 -2,6 -2,5 C-2,4 -1,3 0,3 Z" fill="#000" />
+                  <line x1="2" y1="1" x2="2" y2="-3" stroke="#000" strokeWidth="0.8" />
+                  <line x1="2" y1="-3" x2="3" y2="-4" stroke="#000" strokeWidth="0.8" />
+                </g>
+
+                {/* Fourth note - smaller */}
+                <g transform="translate(14, -2) scale(0.8)">
+                  <path d="M0,0 C1,-1 2,0 2,1 L2,5 C2,6 1,7 0,7 C-1,7 -2,6 -2,5 C-2,4 -1,3 0,3 Z" fill="#000" />
+                  <line x1="2" y1="1" x2="2" y2="-3" stroke="#000" strokeWidth="0.8" />
+                  <line x1="2" y1="-3" x2="3" y2="-4" stroke="#000" strokeWidth="0.8" />
+                </g>
+              </g>
+            </g>
           </svg>
         </div>
         <h1 className="text-3xl font-pixel font-bold text-walrus-teal">WHISTLING WALRUS</h1>
@@ -748,7 +842,7 @@ const AudioRecorder = () => {
         {/* Single Visualization Pane that switches between recording and playback */}
         <div className="mb-6">
           <h3 className="text-walrus-teal font-medium mb-2 text-center">
-            {isRecording ? "Recording Visualization" : "Audio Visualization"}
+            {isRecording ? "Recording Scope" : "Audio Scope"}
           </h3>
           <div className="mx-auto w-[250px] bg-walrus-darker border border-walrus-border rounded-md overflow-hidden">
             {isRecording && mediaRecorderRef.current ? (
@@ -784,47 +878,55 @@ const AudioRecorder = () => {
               </div>
             ) : (
               <div className="w-full h-24 flex items-center justify-center text-walrus-teal/50">
-                Start recording or load audio to see visualization
+                {isLoadingBlob ? "Fetching iceburg tunes..." : "Sing to me, mighty one..."}
               </div>
             )}
           </div>
         </div>
 
-        <div className="flex justify-center space-x-4 mb-6">
-          {!isRecording ? (
-            <button
-              onClick={startRecording}
-              className="bg-walrus-teal/10 hover:bg-walrus-teal/20 text-walrus-teal border border-walrus-teal font-medium py-3 px-6 rounded-md flex items-center transition-colors"
-              disabled={uploading}
-            >
-              <Mic className="mr-2" /> Start Recording
-            </button>
-          ) : (
-            <button
-              onClick={stopRecording}
-              className="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500 font-medium py-3 px-6 rounded-md flex items-center transition-colors"
-            >
-              <Square className="mr-2" /> Stop Recording
-            </button>
-          )}
+        {!isLoadingBlob && (
+          <>
+            {/* First row of buttons */}
+            {audioBlob && !isRecording && (
+              <div className="flex justify-center mb-4">
+                <button
+                  onClick={togglePlayback}
+                  className="bg-walrus-purple/10 hover:bg-walrus-purple/20 text-walrus-purple border border-walrus-purple font-medium py-3 px-6 rounded-md flex items-center justify-center transition-colors mx-auto w-[250px]"
+                  disabled={uploading}
+                >
+                  {isPlaying ? <Pause className="mr-2" /> : <Play className="mr-2" />}
+                  {isPlaying ? 'Pause' : 'Play'}
+                </button>
+              </div>
+            )}
 
-          {audioBlob && !isRecording && (
-            <button
-              onClick={togglePlayback}
-              className="bg-walrus-purple/10 hover:bg-walrus-purple/20 text-walrus-purple border border-walrus-purple font-medium py-3 px-6 rounded-md flex items-center transition-colors"
-              disabled={uploading}
-            >
-              {isPlaying ? <Pause className="mr-2" /> : <Play className="mr-2" />}
-              {isPlaying ? 'Pause' : 'Play'}
-            </button>
-          )}
-        </div>
+            {/* Second row of buttons */}
+            <div className="flex justify-center mb-6">
+              {!isRecording ? (
+                <button
+                  onClick={startRecording}
+                  className="bg-walrus-teal/10 hover:bg-walrus-teal/20 text-walrus-teal border border-walrus-teal font-medium py-3 px-6 rounded-md flex items-center justify-center transition-colors mx-auto w-[250px]"
+                  disabled={uploading}
+                >
+                  <Mic className="mr-2" /> {audioBlob ? "Start New Recording" : "Start Recording"}
+                </button>
+              ) : (
+                <button
+                  onClick={stopRecording}
+                  className="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500 font-medium py-3 px-6 rounded-md flex items-center justify-center transition-colors mx-auto w-[250px]"
+                >
+                  <Square className="mr-2" /> Stop Recording
+                </button>
+              )}
+            </div>
+          </>
+        )}
 
-        {audioBlob && !isRecording && (
-          <div className="flex justify-center space-x-4">
+        {audioBlob && !isRecording && !isLoadingBlob && (
+          <div className="flex justify-center">
             <button
               onClick={saveRecording}
-              className="bg-walrus-teal/10 hover:bg-walrus-teal/20 text-walrus-teal border border-walrus-teal font-medium py-2 px-6 rounded-md flex items-center transition-colors"
+              className="bg-walrus-teal/10 hover:bg-walrus-teal/20 text-walrus-teal border border-walrus-teal font-medium py-2 px-6 rounded-md flex items-center justify-center transition-colors mx-auto w-[250px]"
               disabled={uploading}
             >
               <Save className="mr-2" />
@@ -833,7 +935,7 @@ const AudioRecorder = () => {
           </div>
         )}
 
-        {shareLink && (
+        {shareLink && !isLoadingBlob && (
           <div className="mt-6 p-4 bg-walrus-dark border border-walrus-border rounded-lg shadow-inner">
             <h3 className="font-medium text-walrus-teal mb-2 flex items-center">
               <Share2 className="mr-2" /> Shareable Link
@@ -856,7 +958,7 @@ const AudioRecorder = () => {
         )}
 
         {/* Add blockchain data display */}
-        {blockchainData && (
+        {blockchainData && !isLoadingBlob && (
           <div className="mt-4">
             <button
               onClick={() => setShowBlockchainData(!showBlockchainData)}
