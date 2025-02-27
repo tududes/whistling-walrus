@@ -212,35 +212,42 @@ const AudioRecorder = () => {
     } else {
       try {
         console.log("Starting playback");
+        setErrorMessage(""); // Clear any previous error messages
 
         // Instead of creating a new Audio element each time, reuse the existing one
         // This helps with mobile browser memory management
-        if (audioRef.current.src) {
-          URL.revokeObjectURL(audioRef.current.src);
+        if (!audioRef.current.src || audioRef.current.src === '') {
+          // If there's no source set, create one from the audioBlob
+          const audioUrl = URL.createObjectURL(audioBlob);
+          audioRef.current.src = audioUrl;
+
+          // Explicitly set the MIME type if possible
+          if (audioBlob.type) {
+            audioRef.current.type = audioBlob.type;
+          }
+
+          // Reset the audio element
+          audioRef.current.currentTime = 0;
+          audioRef.current.load();
         }
-
-        // Create a temporary URL for the audio blob
-        const audioUrl = URL.createObjectURL(audioBlob);
-        audioRef.current.src = audioUrl;
-
-        // Reset the audio element
-        audioRef.current.currentTime = 0;
-
-        // Add explicit handling for mobile browsers
-        audioRef.current.load();
 
         // Use a try-catch specifically for the play() method
         // This helps handle autoplay restrictions on mobile
         try {
           // Play the audio - this might be blocked on mobile without user interaction
+          console.log("Attempting to play audio");
           await audioRef.current.play();
           setIsPlaying(true);
+          console.log("Audio playback started successfully");
         } catch (playError) {
           console.error("Autoplay prevented:", playError);
+
+          // On iOS Safari, we need to handle this differently
+          // The error message will guide the user to tap again
           setErrorMessage("Tap the play button again to start playback (mobile browser restriction)");
 
-          // On mobile, we might need a second user interaction
-          // The error message above will guide the user
+          // For iOS Safari, we need to make sure the audio is loaded and ready
+          audioRef.current.load();
         }
       } catch (error) {
         console.error("Error playing audio:", error);
@@ -404,20 +411,15 @@ const AudioRecorder = () => {
       setErrorMessage("");
 
       // Stop current playback if any
-      audioRef.current.pause();
-      setIsPlaying(false);
+      if (isPlaying) {
+        audioRef.current.pause();
+        setIsPlaying(false);
+      }
       console.log("Stopped current playback");
 
       // Clean up audio resources
       await cleanupAudioResources();
       console.log("Cleaned up audio resources");
-
-      // Instead of creating a new Audio element, reuse the existing one
-      // This is better for mobile browser memory management
-      if (audioRef.current.src) {
-        URL.revokeObjectURL(audioRef.current.src);
-        audioRef.current.src = '';
-      }
 
       console.log("Fetching recording from Walrus");
       const response = await fetch(`${WALRUS_AGGREGATOR_URL}/v1/blobs/${blobId}`);
@@ -425,22 +427,31 @@ const AudioRecorder = () => {
       if (response.ok) {
         console.log("Successfully fetched recording");
         const blob = await response.blob();
-        setAudioBlob(blob);
-        console.log("Set audio blob");
+
+        // Create a new blob with explicit MIME type for better mobile compatibility
+        // iOS Safari has better support for MP3 than WAV
+        const mimeType = 'audio/mp3';
+        const newBlob = new Blob([blob], { type: mimeType });
+        setAudioBlob(newBlob);
+        console.log("Set audio blob with type:", mimeType);
 
         // Set up for new playback
-        const audioUrl = URL.createObjectURL(blob);
+        if (audioRef.current.src) {
+          URL.revokeObjectURL(audioRef.current.src);
+        }
+        const audioUrl = URL.createObjectURL(newBlob);
         audioRef.current.src = audioUrl;
         console.log("Set audio source to blob URL");
 
-        // Explicitly set the MIME type if possible
-        // This can help with format detection on mobile
-        if (blob.type) {
-          audioRef.current.type = blob.type;
-        }
+        // Explicitly set the MIME type
+        audioRef.current.type = mimeType;
 
         // Preload the audio - use 'metadata' for faster loading on mobile
         audioRef.current.preload = 'metadata';
+
+        // For iOS Safari, we need to set these attributes
+        audioRef.current.controls = true;
+        audioRef.current.crossOrigin = 'anonymous';
         audioRef.current.load();
         console.log("Loaded audio");
 
@@ -466,7 +477,6 @@ const AudioRecorder = () => {
           setShowBlockchainData(false);
         }
 
-        // Add a custom play method to the component to handle playback properly
         console.log("Recording loaded and ready for playback");
       } else {
         throw new Error("Failed to load recording");
@@ -525,41 +535,51 @@ const AudioRecorder = () => {
   const playRecording = async (blobId) => {
     try {
       console.log("Playing recording:", blobId);
+      setErrorMessage(""); // Clear any previous error messages
 
       // If already playing, stop first
       if (isPlaying) {
         audioRef.current.pause();
         setIsPlaying(false);
+        return; // Exit early if we're just stopping playback
       }
 
       // If we're playing a different recording than what's currently loaded
-      if (window.location.hash.substring(1) !== blobId) {
+      const currentBlobId = window.location.hash.substring(1);
+      if (currentBlobId !== blobId) {
         // Load the recording first
         await loadRecording(blobId);
       }
 
       // Make sure we have the recording loaded
-      if (!audioRef.current.src) {
+      if (!audioRef.current.src || audioRef.current.src === '') {
         console.error("No audio source available");
+        setErrorMessage("Audio source not available. Please try again.");
         return;
       }
 
       // For mobile browsers, we need to handle autoplay restrictions
       try {
+        // Reset the audio position
+        audioRef.current.currentTime = 0;
+
         // First set the playing state to true
         setIsPlaying(true);
 
         // Then start the audio playback
         console.log("Starting audio playback");
         await audioRef.current.play();
-
         console.log("Audio playback started successfully");
       } catch (playError) {
         console.error("Autoplay prevented:", playError);
         setIsPlaying(false);
-        setErrorMessage("Tap the play button again to start playback (mobile browser restriction)");
-      }
 
+        // Special handling for iOS Safari
+        setErrorMessage("Tap the play button again to start playback (mobile browser restriction)");
+
+        // Make sure the audio is loaded and ready for the next tap
+        audioRef.current.load();
+      }
     } catch (error) {
       console.error("Error playing recording:", error);
       setErrorMessage("Could not play the recording");
@@ -640,6 +660,54 @@ const AudioRecorder = () => {
     };
   }, []);
 
+  // Add a useEffect to handle iOS Safari's specific requirements for audio playback
+  useEffect(() => {
+    // Function to enable audio playback on iOS Safari
+    const enableIOSAudio = () => {
+      // Create a silent audio context and play it
+      // This "unlocks" the audio on iOS Safari
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const silentBuffer = audioContext.createBuffer(1, 1, 22050);
+      const source = audioContext.createBufferSource();
+      source.buffer = silentBuffer;
+      source.connect(audioContext.destination);
+      source.start(0);
+      source.disconnect();
+
+      // Also try to load and play a short silent audio
+      if (audioRef.current) {
+        const playPromise = audioRef.current.play();
+        if (playPromise !== undefined) {
+          playPromise.then(() => {
+            // Audio playback started successfully
+            audioRef.current.pause();
+            console.log("iOS audio unlocked");
+          }).catch(error => {
+            // Auto-play was prevented
+            console.log("iOS audio unlock failed, will try again on next interaction");
+          });
+        }
+      }
+
+      // Remove the event listeners once we've tried to unlock audio
+      document.removeEventListener('touchstart', enableIOSAudio);
+      document.removeEventListener('touchend', enableIOSAudio);
+      document.removeEventListener('click', enableIOSAudio);
+    };
+
+    // Add event listeners for user interaction
+    document.addEventListener('touchstart', enableIOSAudio, { once: true });
+    document.addEventListener('touchend', enableIOSAudio, { once: true });
+    document.addEventListener('click', enableIOSAudio, { once: true });
+
+    return () => {
+      // Clean up event listeners
+      document.removeEventListener('touchstart', enableIOSAudio);
+      document.removeEventListener('touchend', enableIOSAudio);
+      document.removeEventListener('click', enableIOSAudio);
+    };
+  }, []);
+
   return (
     <div className="max-w-4xl mx-auto p-6 bg-walrus-darker shadow-lg rounded-lg border border-walrus-border">
       {/* Toast notification */}
@@ -682,11 +750,11 @@ const AudioRecorder = () => {
           <h3 className="text-walrus-teal font-medium mb-2 text-center">
             {isRecording ? "Recording Visualization" : "Audio Visualization"}
           </h3>
-          <div className="mx-auto w-2/3 bg-walrus-darker border border-walrus-border rounded-md overflow-hidden">
+          <div className="mx-auto w-[250px] bg-walrus-darker border border-walrus-border rounded-md overflow-hidden">
             {isRecording && mediaRecorderRef.current ? (
               <LiveAudioVisualizer
                 mediaRecorder={mediaRecorderRef.current}
-                width={600}
+                width={250}
                 height={100}
                 barWidth={3}
                 gap={1}
@@ -701,7 +769,7 @@ const AudioRecorder = () => {
               <div className="w-full h-24">
                 <AudioVisualizer
                   blob={audioBlob}
-                  width={600}
+                  width={250}
                   height={100}
                   barWidth={3}
                   gap={1}
