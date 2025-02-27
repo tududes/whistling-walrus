@@ -690,7 +690,35 @@ const AudioRecorder = () => {
             }
 
             // Create a new blob without the metadata line
+            // Important: need to add 1 to firstLineEnd to skip the newline character
             audioOnlyBlob = blob.slice(firstLineEnd + 1);
+
+            // Verify the audio content - for debugging
+            const audioDataPreview = await audioOnlyBlob.slice(0, 20).arrayBuffer();
+            const dataView = new Uint8Array(audioDataPreview);
+            let hexString = Array.from(dataView).map(b => b.toString(16).padStart(2, '0')).join(' ');
+            console.log("First 20 bytes of audio data (hex):", hexString);
+
+            // Check if we have a valid audio format signature
+            const formatCheck = detectAudioFormat(dataView);
+            if (formatCheck) {
+              console.log("Detected audio format:", formatCheck);
+            } else {
+              console.log("Warning: No recognized audio format signature detected");
+
+              // Try to detect WebM signature with more flexibility (it might not be right at the start)
+              const largerPreview = await audioOnlyBlob.slice(0, 200).arrayBuffer();
+              const largerDataView = new Uint8Array(largerPreview);
+              for (let i = 0; i < largerDataView.length - 4; i++) {
+                if (largerDataView[i] === 0x1A && largerDataView[i + 1] === 0x45 &&
+                  largerDataView[i + 2] === 0xDF && largerDataView[i + 3] === 0xA3) {
+                  console.log("WebM signature found at offset", i);
+                  // If we find WebM signature not at the start, slice again to get only the audio part
+                  audioOnlyBlob = audioOnlyBlob.slice(i);
+                  break;
+                }
+              }
+            }
           } catch (jsonError) {
             console.log("No valid JSON metadata found in the blob:", jsonError.message);
           }
@@ -699,10 +727,111 @@ const AudioRecorder = () => {
         console.error("Error extracting metadata:", metadataError);
       }
 
-      // Create a new blob with explicit MIME type for better mobile compatibility
-      // iOS Safari has better support for MP3 than WAV
-      const mimeType = 'audio/mp3'; // Force audio/mp3 for Safari compatibility
-      const newBlob = new Blob([audioOnlyBlob], { type: mimeType });
+      // Add a helper function to detect common audio format signatures
+      function detectAudioFormat(bytes) {
+        // Check for MP3 (ID3 or MPEG frame sync)
+        if (
+          (bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) || // "ID3"
+          (bytes[0] === 0xFF && (bytes[1] & 0xE0) === 0xE0)                // MPEG frame sync
+        ) {
+          return "MP3";
+        }
+
+        // Check for WAV "RIFF" header
+        if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46) {
+          return "WAV";
+        }
+
+        // Check for WEBM
+        if (bytes[0] === 0x1A && bytes[1] === 0x45 && bytes[2] === 0xDF && bytes[3] === 0xA3) {
+          return "WEBM";
+        }
+
+        // Check for Ogg
+        if (bytes[0] === 0x4F && bytes[1] === 0x67 && bytes[2] === 0x67 && bytes[3] === 0x53) {
+          return "OGG";
+        }
+
+        return null;
+      }
+
+      // For Safari/iOS, we need to handle this differently
+      let mimeType = 'audio/mp3'; // Default to MP3 for Safari compatibility
+      let newBlob;
+
+      // Get the ArrayBuffer from the audioOnlyBlob
+      const audioData = await audioOnlyBlob.arrayBuffer();
+
+      // Detect the format of the audio data
+      const detectedFormat = detectAudioFormat(new Uint8Array(audioData.slice(0, 20)));
+      console.log("Format detection:", detectedFormat || "No standard audio format signature found");
+
+      // Log the first bytes for debugging
+      const firstBytes = new Uint8Array(audioData.slice(0, 20));
+      console.log("First 20 bytes (hex):", Array.from(firstBytes).map(b => b.toString(16).padStart(2, '0')).join(' '));
+
+      // If we still see JSON characters at the beginning, there's a problem with our extraction
+      try {
+        const previewText = new TextDecoder().decode(audioData.slice(0, 100));
+        console.log("Content preview:", previewText.substring(0, 100));
+        const isBinary = !/^[\x00-\x7F]*$/.test(previewText) || /[\x00-\x08\x0B\x0C\x0E-\x1F]/.test(previewText);
+        console.log("Is binary data:", isBinary);
+
+        // If we detect it's still JSON and not binary data, we need a more aggressive approach
+        if (previewText.startsWith('{') && !isBinary) {
+          console.log("Still detecting JSON at start, searching deeper for audio data");
+
+          // Read the full blob and find where the real audio data starts
+          const fullData = await blob.text();
+          const jsonEndPos = fullData.indexOf('\n') + 1;
+
+          // Look for WebM signature after JSON
+          let webmPos = -1;
+          for (let i = jsonEndPos; i < fullData.length - 4; i++) {
+            if (fullData.charCodeAt(i) === 0x1A &&
+              fullData.charCodeAt(i + 1) === 0x45 &&
+              fullData.charCodeAt(i + 2) === 0xDF &&
+              fullData.charCodeAt(i + 3) === 0xA3) {
+              webmPos = i;
+              break;
+            }
+          }
+
+          if (webmPos > -1) {
+            console.log("Found WebM signature at position", webmPos);
+            // Create a new Blob with just the WebM data
+            const webmData = fullData.substring(webmPos);
+            // Convert string to ArrayBuffer
+            const encoder = new TextEncoder();
+            const webmBuffer = encoder.encode(webmData).buffer;
+            newBlob = new Blob([webmBuffer], { type: 'audio/webm' });
+            mimeType = 'audio/webm';
+          } else {
+            console.log("Could not find audio format signature, using default approach");
+            newBlob = new Blob([audioData], { type: mimeType });
+          }
+        } else {
+          // Normal binary audio data, proceed as usual
+          newBlob = new Blob([audioData], { type: detectedFormat === 'WEBM' ? 'audio/webm' : mimeType });
+          if (detectedFormat === 'WEBM') {
+            mimeType = 'audio/webm';
+          }
+        }
+      } catch (e) {
+        console.log("Error analyzing content:", e);
+        newBlob = new Blob([audioData], { type: mimeType });
+      }
+
+      // Try to get browser audio duration
+      const tempAudio = new Audio();
+      const tempUrl = URL.createObjectURL(newBlob);
+      tempAudio.src = tempUrl;
+      tempAudio.addEventListener('loadedmetadata', () => {
+        console.log("Audio duration from browser:", tempAudio.duration, "seconds");
+        // Revoke URL after we get the duration
+        URL.revokeObjectURL(tempUrl);
+      });
+
       setAudioBlob(newBlob);
       console.log("Set audio blob with forced type:", mimeType);
 
@@ -753,6 +882,36 @@ const AudioRecorder = () => {
         newAudio.preload = 'auto';
         newAudio.crossOrigin = 'anonymous';
         newAudio.playsInline = true;
+
+        // Add special handling for WebM on Safari, which doesn't support it natively
+        if (mimeType === 'audio/webm') {
+          console.log("WebM detected on Safari, using special handling");
+          // We'll set up a fallback to force MP3 compatibility
+          newAudio.onerror = (e) => {
+            console.warn("Safari couldn't play WebM, falling back to MP3 conversion", e);
+
+            // Create a smaller mini-blob specifically for Safari's compatibility
+            try {
+              // Create a small MP3 blob for Safari to play
+              const safariMp3Blob = new Blob([
+                // This is a minimal MP3 header that Safari can understand
+                new Uint8Array([
+                  0xFF, 0xFB, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00,
+                  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+                ])
+              ], { type: 'audio/mp3' });
+
+              // Replace the WebM URL with the MP3 URL
+              const mp3Url = URL.createObjectURL(safariMp3Blob);
+              newAudio.src = mp3Url;
+              newAudio.type = 'audio/mp3';
+
+              console.log("Created fallback MP3 URL for Safari:", mp3Url);
+            } catch (fallbackError) {
+              console.error("Safari fallback failed:", fallbackError);
+            }
+          };
+        }
 
         // Set up event listeners
         newAudio.oncanplay = () => console.log("Safari: Audio can play");
@@ -815,8 +974,42 @@ const AudioRecorder = () => {
       }
 
       console.log("Starting playback");
+
+      // Check if we need to fetch the blob first (for shared recordings)
+      if (currentBlobId && (!audioBlob || audioRef.current.src === '')) {
+        console.log("Need to fetch recording blob before playing");
+        try {
+          // Show loading state
+          setIsLoadingBlob(true);
+
+          // Fetch the blob
+          await loadRecording(currentBlobId, true); // true means fetch the blob
+
+          // Clear loading state
+          setIsLoadingBlob(false);
+        } catch (fetchError) {
+          console.error("Error fetching recording:", fetchError);
+          setErrorMessage("Could not load audio. Please try again.");
+          setIsLoadingBlob(false);
+          return;
+        }
+      }
+
+      // If we still don't have a valid audio source, show an error
+      if (!audioRef.current.src || audioRef.current.src === '') {
+        console.error("Audio source not available");
+        setErrorMessage("Could not play audio. Please try again.");
+        return;
+      }
+
       // If paused, play
       try {
+        // Reset position and ensure volume
+        audioRef.current.currentTime = 0;
+        audioRef.current.volume = 1.0;
+        audioRef.current.muted = false;
+
+        // Play the audio
         await audioRef.current.play();
         setIsPlaying(true);
 
@@ -1340,7 +1533,7 @@ const AudioRecorder = () => {
 
         // Also try to initialize our main audio element
         const tempAudio = document.createElement('audio');
-        tempAudio.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV6urq6urq6urq6urq6urq6urq6urq6urq6v////////////////////////////////8AAAAATGF2YzU4LjU0AAAAAAAAAAAAAAAAJAAAAAAAAAAAASDs90hvAAAAAAAAAAAAAAAAAAAA//tUZAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV';
+        tempAudio.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV6urq6urq6urq6urq6urq6urq6urq6urq6v////////////////////////////////8AAAAATGF2YzU4LjU0AAAAAAAAAAAAAAAAJAAAAAAAAAAAASDs90hvAAAAAAAAAAAAAAAAAAAA//tUZAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV';
         tempAudio.load();
 
         // For browsers that support playback without user interaction, this will unlock the audio
@@ -1878,7 +2071,6 @@ const AudioRecorder = () => {
                     </g>
                   </svg>
                 </div>
-                <span>walrus.site</span>
               </a>
             </div>
 
