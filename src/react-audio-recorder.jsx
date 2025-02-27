@@ -49,6 +49,8 @@ const AudioRecorder = () => {
   const [toast, setToast] = useState({ visible: false, message: '' });
   // Add loading state for blob fetching
   const [isLoadingBlob, setIsLoadingBlob] = useState(false);
+  // Add a new state variable to track when we have a valid blobId
+  const [currentBlobId, setCurrentBlobId] = useState("");
 
   // Remove the old visualization data states
   // const [visualizationData, setVisualizationData] = useState([]);
@@ -217,58 +219,245 @@ const AudioRecorder = () => {
     }
   };
 
+  // Add a function to get the duration of an audio blob
+  const getAudioDuration = (blob) => {
+    return new Promise((resolve, reject) => {
+      try {
+        // Create a temporary audio element
+        const tempAudio = new Audio();
+        tempAudio.addEventListener('loadedmetadata', () => {
+          // Get the duration and clean up
+          const duration = Math.round(tempAudio.duration);
+          URL.revokeObjectURL(tempAudio.src);
+          resolve(duration);
+        });
+
+        tempAudio.addEventListener('error', (err) => {
+          URL.revokeObjectURL(tempAudio.src);
+          reject(new Error("Error loading audio: " + (err.message || "Unknown error")));
+        });
+
+        // Load the blob
+        const audioUrl = URL.createObjectURL(blob);
+        tempAudio.src = audioUrl;
+        tempAudio.preload = 'metadata';
+      } catch (error) {
+        reject(error);
+      }
+    });
+  };
+
+  // Modify loadRecording to set the currentBlobId
+  const loadRecording = async (blobId, shouldFetchBlob = false) => {
+    try {
+      console.log("Loading recording:", blobId);
+      setErrorMessage("");
+      // Set loading state to true
+      setIsLoadingBlob(true);
+
+      // Set the current blobId
+      setCurrentBlobId(blobId);
+
+      // Stop current playback if any
+      if (isPlaying) {
+        audioRef.current.pause();
+        setIsPlaying(false);
+      }
+      console.log("Stopped current playback");
+
+      // Clean up audio resources
+      await cleanupAudioResources();
+      console.log("Cleaned up audio resources");
+
+      // Store the blobId for later use
+      // This is a key change - we're not fetching the blob immediately
+      if (!shouldFetchBlob) {
+        // Just update the URL hash and set loading to false
+        window.location.hash = blobId;
+
+        // Update share link using hash format
+        const shareUrl = `${window.location.origin}/#${blobId}`;
+        setShareLink(shareUrl);
+
+        // Try to fetch blockchain metadata for this blob
+        try {
+          const metadataResponse = await fetch(`${WALRUS_AGGREGATOR_URL}/v1/blobs/${blobId}/metadata`);
+          if (metadataResponse.ok) {
+            const metadata = await metadataResponse.json();
+            setBlockchainData(metadata);
+
+            // If the metadata contains a duration, use it
+            if (metadata.duration) {
+              setRecordingTime(Math.round(metadata.duration));
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching blockchain metadata:", error);
+        }
+
+        // Set loading state to false
+        setIsLoadingBlob(false);
+        return;
+      }
+
+      // Only fetch the blob if shouldFetchBlob is true
+      console.log("Fetching recording from Walrus");
+      const response = await fetch(`${WALRUS_AGGREGATOR_URL}/v1/blobs/${blobId}`);
+
+      if (response.ok) {
+        console.log("Successfully fetched recording");
+        const blob = await response.blob();
+
+        // Create a new blob with explicit MIME type for better mobile compatibility
+        // iOS Safari has better support for MP3 than WAV
+        const mimeType = blob.type || 'audio/mp3';
+        const newBlob = new Blob([blob], { type: mimeType });
+        setAudioBlob(newBlob);
+        console.log("Set audio blob with type:", mimeType);
+
+        // Try to get the duration from the blob
+        try {
+          const duration = await getAudioDuration(newBlob);
+          console.log("Got audio duration:", duration);
+          setRecordingTime(duration);
+        } catch (durationError) {
+          console.error("Error getting audio duration:", durationError);
+        }
+
+        // Set up for new playback
+        if (audioRef.current.src) {
+          URL.revokeObjectURL(audioRef.current.src);
+        }
+        const audioUrl = URL.createObjectURL(newBlob);
+        audioRef.current.src = audioUrl;
+        console.log("Set audio source to blob URL");
+
+        // Explicitly set the MIME type
+        audioRef.current.type = mimeType;
+
+        // Preload the audio - use 'auto' for better mobile compatibility
+        audioRef.current.preload = 'auto';
+
+        // For iOS Safari, we need to set these attributes
+        audioRef.current.controls = true;
+        audioRef.current.crossOrigin = 'anonymous';
+
+        // Set playsinline attribute for iOS (important for mobile playback)
+        audioRef.current.playsInline = true;
+
+        // Force load the audio to ensure it's ready for playback
+        audioRef.current.load();
+        console.log("Loaded audio");
+
+        // Update the URL hash to reflect the current recording
+        window.location.hash = blobId;
+
+        // Update share link using hash format
+        const shareUrl = `${window.location.origin}/#${blobId}`;
+        setShareLink(shareUrl);
+
+        // Try to fetch blockchain metadata for this blob
+        try {
+          const metadataResponse = await fetch(`${WALRUS_AGGREGATOR_URL}/v1/blobs/${blobId}/metadata`);
+          if (metadataResponse.ok) {
+            const metadata = await metadataResponse.json();
+            setBlockchainData(metadata);
+
+            // If the metadata contains a duration, use it (as a fallback)
+            if (metadata.duration && !audioRef.current.duration) {
+              setRecordingTime(Math.round(metadata.duration));
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching blockchain metadata:", error);
+        }
+
+        // Set loading state to false after everything is loaded
+        setIsLoadingBlob(false);
+      } else {
+        console.error("Failed to fetch recording:", response.status);
+        setErrorMessage(`Failed to load recording (${response.status}). Please try again.`);
+        // Set loading state to false on error
+        setIsLoadingBlob(false);
+      }
+    } catch (error) {
+      console.error("Error loading recording:", error);
+      setErrorMessage(`Error loading recording: ${error.message}`);
+      // Set loading state to false on error
+      setIsLoadingBlob(false);
+    }
+  };
+
   // Update the togglePlayback function to handle mobile browser limitations
   const togglePlayback = async () => {
-    if (!audioBlob) return;
-
     if (isPlaying) {
       console.log("Stopping playback");
       audioRef.current.pause();
       setIsPlaying(false);
-    } else {
-      try {
-        console.log("Starting playback");
-        setErrorMessage(""); // Clear any previous error messages
+      return;
+    }
 
-        // Instead of creating a new Audio element each time, reuse the existing one
-        // This helps with mobile browser memory management
-        if (!audioRef.current.src || audioRef.current.src === '') {
-          // If there's no source set, create one from the audioBlob
-          const audioUrl = URL.createObjectURL(audioBlob);
-          audioRef.current.src = audioUrl;
+    // If we don't have the audio blob yet but we have a blobId, fetch it
+    if (!audioBlob && currentBlobId) {
+      console.log("No audio blob available, fetching it first");
+      await loadRecording(currentBlobId, true); // true means fetch the blob
+    } else if (!audioBlob && !currentBlobId) {
+      console.log("No audio blob available and no blobId");
+      setErrorMessage("No recording available to play");
+      return;
+    }
 
-          // Explicitly set the MIME type if possible
-          if (audioBlob.type) {
-            audioRef.current.type = audioBlob.type;
+    try {
+      console.log("Starting playback");
+      setErrorMessage(""); // Clear any previous error messages
+
+      // Make sure we have a source set
+      if (!audioRef.current.src || audioRef.current.src === '') {
+        // If there's no source set, create one from the audioBlob
+        const audioUrl = URL.createObjectURL(audioBlob);
+        audioRef.current.src = audioUrl;
+
+        // Explicitly set the MIME type if possible
+        if (audioBlob.type) {
+          audioRef.current.type = audioBlob.type;
+        }
+
+        // Reset the audio element
+        audioRef.current.currentTime = 0;
+        audioRef.current.load();
+
+        // Try to get the duration from the audio element
+        audioRef.current.addEventListener('loadedmetadata', () => {
+          if (audioRef.current.duration && !isNaN(audioRef.current.duration)) {
+            setRecordingTime(Math.round(audioRef.current.duration));
           }
-
-          // Reset the audio element
-          audioRef.current.currentTime = 0;
-          audioRef.current.load();
-        }
-
-        // Use a try-catch specifically for the play() method
-        // This helps handle autoplay restrictions on mobile
-        try {
-          // Play the audio - this might be blocked on mobile without user interaction
-          console.log("Attempting to play audio");
-          await audioRef.current.play();
-          setIsPlaying(true);
-          console.log("Audio playback started successfully");
-        } catch (playError) {
-          console.error("Autoplay prevented:", playError);
-
-          // On iOS Safari, we need to handle this differently
-          // The error message will guide the user to tap again
-          setErrorMessage("Tap the play button again to start playback (mobile browser restriction)");
-
-          // For iOS Safari, we need to make sure the audio is loaded and ready
-          audioRef.current.load();
-        }
-      } catch (error) {
-        console.error("Error playing audio:", error);
-        setErrorMessage("Could not play the recording. Please try again.");
+        }, { once: true });
+      } else if (audioRef.current.duration && !isNaN(audioRef.current.duration) && recordingTime === 0) {
+        // If we already have a source but the recording time is not set, set it now
+        setRecordingTime(Math.round(audioRef.current.duration));
       }
+
+      // Use a try-catch specifically for the play() method
+      // This helps handle autoplay restrictions on mobile
+      try {
+        // Play the audio - this might be blocked on mobile without user interaction
+        console.log("Attempting to play audio");
+        await audioRef.current.play();
+        setIsPlaying(true);
+        console.log("Audio playback started successfully");
+      } catch (playError) {
+        console.error("Autoplay prevented:", playError);
+
+        // On iOS Safari, we need to handle this differently
+        // The error message will guide the user to tap again
+        setErrorMessage("Please tap the play button again to start audio playback");
+
+        // For iOS Safari, we need to make sure the audio is loaded and ready
+        audioRef.current.load();
+      }
+    } catch (error) {
+      console.error("Error playing audio:", error);
+      setErrorMessage("Could not play the recording. Please try again.");
     }
   };
 
@@ -437,131 +626,22 @@ const AudioRecorder = () => {
     }
   };
 
-  // Modify loadRecording to better handle mobile browsers
-  const loadRecording = async (blobId) => {
-    try {
-      console.log("Loading recording:", blobId);
-      setErrorMessage("");
-      // Set loading state to true
-      setIsLoadingBlob(true);
-
-      // Stop current playback if any
-      if (isPlaying) {
-        audioRef.current.pause();
-        setIsPlaying(false);
-      }
-      console.log("Stopped current playback");
-
-      // Clean up audio resources
-      await cleanupAudioResources();
-      console.log("Cleaned up audio resources");
-
-      console.log("Fetching recording from Walrus");
-      const response = await fetch(`${WALRUS_AGGREGATOR_URL}/v1/blobs/${blobId}`);
-
-      if (response.ok) {
-        console.log("Successfully fetched recording");
-        const blob = await response.blob();
-
-        // Create a new blob with explicit MIME type for better mobile compatibility
-        // iOS Safari has better support for MP3 than WAV
-        const mimeType = blob.type || 'audio/mp3';
-        const newBlob = new Blob([blob], { type: mimeType });
-        setAudioBlob(newBlob);
-        console.log("Set audio blob with type:", mimeType);
-
-        // Set up for new playback
-        if (audioRef.current.src) {
-          URL.revokeObjectURL(audioRef.current.src);
-        }
-        const audioUrl = URL.createObjectURL(newBlob);
-        audioRef.current.src = audioUrl;
-        console.log("Set audio source to blob URL");
-
-        // Explicitly set the MIME type
-        audioRef.current.type = mimeType;
-
-        // Preload the audio - use 'auto' for better mobile compatibility
-        audioRef.current.preload = 'auto';
-
-        // For iOS Safari, we need to set these attributes
-        audioRef.current.controls = true;
-        audioRef.current.crossOrigin = 'anonymous';
-
-        // Set playsinline attribute for iOS (important for mobile playback)
-        audioRef.current.playsInline = true;
-
-        // Force load the audio to ensure it's ready for playback
-        audioRef.current.load();
-        console.log("Loaded audio");
-
-        // Try to trigger a silent play to unlock audio on iOS
-        try {
-          const silentPlay = audioRef.current.play();
-          if (silentPlay !== undefined) {
-            silentPlay.then(() => {
-              // Immediately pause after unlocking
-              audioRef.current.pause();
-              audioRef.current.currentTime = 0;
-              console.log("Audio unlocked for iOS");
-            }).catch(e => {
-              // This is expected on first interaction
-              console.log("Silent play was prevented, will require user interaction:", e);
-            });
-          }
-        } catch (e) {
-          console.log("Silent play attempt failed:", e);
-        }
-
-        // Update the URL hash to reflect the current recording
-        window.location.hash = blobId;
-
-        // Update share link using hash format
-        const shareUrl = `${window.location.origin}/#${blobId}`;
-        setShareLink(shareUrl);
-
-        // Try to fetch blockchain metadata for this blob
-        try {
-          const metadataResponse = await fetch(`${WALRUS_AGGREGATOR_URL}/v1/blobs/${blobId}/metadata`);
-          if (metadataResponse.ok) {
-            const metadata = await metadataResponse.json();
-            setBlockchainData(metadata);
-          }
-        } catch (error) {
-          console.error("Error fetching blockchain metadata:", error);
-        }
-
-        // Set loading state to false after everything is loaded
-        setIsLoadingBlob(false);
-      } else {
-        console.error("Failed to fetch recording:", response.status);
-        setErrorMessage(`Failed to load recording (${response.status}). Please try again.`);
-        // Set loading state to false on error
-        setIsLoadingBlob(false);
-      }
-    } catch (error) {
-      console.error("Error loading recording:", error);
-      setErrorMessage(`Error loading recording: ${error.message}`);
-      // Set loading state to false on error
-      setIsLoadingBlob(false);
-    }
-  };
-
   const deleteRecording = (id) => {
     // Check if the deleted recording is the one currently in the URL hash
-    const currentBlobId = window.location.hash.substring(1);
+    const hashBlobId = window.location.hash.substring(1);
     const recordingToDelete = recordings.find(recording => recording.id === id);
 
     // Remove the recording from the list
     setRecordings(prev => prev.filter(recording => recording.id !== id));
 
     // If we're deleting the currently active recording, clear the hash and reset the UI
-    if (recordingToDelete && recordingToDelete.blobId === currentBlobId) {
+    if (recordingToDelete && recordingToDelete.blobId === hashBlobId) {
       // Clear the URL hash
       window.history.pushState("", document.title, window.location.pathname + window.location.search);
 
       // Reset UI state
       setAudioBlob(null);
+      setCurrentBlobId(""); // Clear the currentBlobId
       setRecordingTime(0);
       setShareLink("");
       setBlockchainData(null);
@@ -596,6 +676,11 @@ const AudioRecorder = () => {
 
   // Format time in MM:SS format
   const formatTime = (seconds) => {
+    // Handle invalid values
+    if (seconds === undefined || seconds === null || isNaN(seconds) || !isFinite(seconds)) {
+      return "00:00";
+    }
+
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
     return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
@@ -610,13 +695,16 @@ const AudioRecorder = () => {
     // Check URL hash (without the # symbol)
     const hashId = window.location.hash.substring(1);
 
-    // Load recording from either source
+    // Load recording from either source, but don't fetch the blob yet
+    // We'll only fetch the blob when the user clicks play
     if (recordingId) {
       setIsLoadingBlob(true);
-      loadRecording(recordingId);
+      setCurrentBlobId(recordingId);
+      loadRecording(recordingId, false); // false means don't fetch the blob yet
     } else if (hashId && hashId.length > 0) {
       setIsLoadingBlob(true);
-      loadRecording(hashId);
+      setCurrentBlobId(hashId);
+      loadRecording(hashId, false); // false means don't fetch the blob yet
     }
   }, []);
 
@@ -626,6 +714,9 @@ const AudioRecorder = () => {
       console.log("Playing recording:", blobId);
       setErrorMessage(""); // Clear any previous error messages
 
+      // Set the current blobId
+      setCurrentBlobId(blobId);
+
       // If already playing, stop first
       if (isPlaying) {
         audioRef.current.pause();
@@ -634,17 +725,48 @@ const AudioRecorder = () => {
       }
 
       // If we're playing a different recording than what's currently loaded
-      const currentBlobId = window.location.hash.substring(1);
-      if (currentBlobId !== blobId) {
-        // Load the recording first
-        await loadRecording(blobId);
+      const hashBlobId = window.location.hash.substring(1);
+      if (hashBlobId !== blobId) {
+        // Just update the hash and metadata first, don't fetch the blob yet
+        await loadRecording(blobId, false);
+      }
+
+      // Now fetch the blob if we don't have it yet
+      if (!audioBlob) {
+        console.log("No audio blob available, fetching it first");
+        await loadRecording(blobId, true); // true means fetch the blob
       }
 
       // Make sure we have the recording loaded
       if (!audioRef.current.src || audioRef.current.src === '') {
-        console.error("No audio source available");
-        setErrorMessage("Audio source not available. Please try again.");
-        return;
+        // If there's no source set, create one from the audioBlob
+        if (audioBlob) {
+          const audioUrl = URL.createObjectURL(audioBlob);
+          audioRef.current.src = audioUrl;
+
+          // Explicitly set the MIME type if possible
+          if (audioBlob.type) {
+            audioRef.current.type = audioBlob.type;
+          }
+
+          // Reset the audio element
+          audioRef.current.currentTime = 0;
+          audioRef.current.load();
+
+          // Try to get the duration from the audio element
+          audioRef.current.addEventListener('loadedmetadata', () => {
+            if (audioRef.current.duration && !isNaN(audioRef.current.duration)) {
+              setRecordingTime(Math.round(audioRef.current.duration));
+            }
+          }, { once: true });
+        } else {
+          console.error("No audio blob available");
+          setErrorMessage("Audio source not available. Please try again.");
+          return;
+        }
+      } else if (audioRef.current.duration && !isNaN(audioRef.current.duration) && recordingTime === 0) {
+        // If we already have a source but the recording time is not set, set it now
+        setRecordingTime(Math.round(audioRef.current.duration));
       }
 
       // For mobile browsers, we need to handle autoplay restrictions
@@ -670,26 +792,10 @@ const AudioRecorder = () => {
             setIsPlaying(false);
 
             // Show a more helpful message for mobile users
-            setErrorMessage("Please tap the play button again to start playback (mobile browser requires user interaction)");
+            setErrorMessage("Please tap the play button again to start audio playback");
 
             // For iOS Safari, we need to ensure the audio is ready for the next tap
             audioRef.current.load();
-
-            // Add a one-time click event listener to the document to help unlock audio
-            const unlockAudio = () => {
-              const newPlayPromise = audioRef.current.play();
-              if (newPlayPromise !== undefined) {
-                newPlayPromise.then(() => {
-                  setIsPlaying(true);
-                  console.log("Audio playback started on second attempt");
-                }).catch(err => {
-                  console.error("Still couldn't play audio:", err);
-                });
-              }
-              document.removeEventListener('click', unlockAudio);
-            };
-
-            document.addEventListener('click', unlockAudio, { once: true });
           });
         }
       } catch (playError) {
@@ -713,7 +819,7 @@ const AudioRecorder = () => {
     }
   };
 
-  // Add a function to reset the page for a new recording
+  // Update the resetForNewRecording function to clear the currentBlobId
   const resetForNewRecording = async () => {
     // Stop any ongoing recording
     if (isRecording) {
@@ -731,6 +837,7 @@ const AudioRecorder = () => {
 
     // Reset all state related to the current recording/playback
     setAudioBlob(null);
+    setCurrentBlobId(""); // Clear the currentBlobId
     setRecordingTime(0);
     setShareLink("");
     setErrorMessage("");
@@ -954,11 +1061,11 @@ const AudioRecorder = () => {
         <div className="bg-walrus-dark border border-walrus-border p-6 rounded-lg mb-8 shadow-md">
           <div className="flex justify-center items-center mb-6">
             <div className="text-5xl font-pixel font-bold text-walrus-teal">
-              {formatTime(recordingTime)}
+              {isLoadingBlob ? "00:00" : formatTime(recordingTime)}
             </div>
           </div>
 
-          {/* Single Visualization Pane that switches between recording and playback */}
+          {/* Audio scope visualization */}
           <div className="mb-6">
             <h3 className="text-walrus-teal font-medium mb-2 text-center">
               {isRecording ? "Recording Scope" : "Audio Scope"}
@@ -997,31 +1104,31 @@ const AudioRecorder = () => {
                 </div>
               ) : (
                 <div className="w-full h-24 flex items-center justify-center text-walrus-teal/50">
-                  {isLoadingBlob ? "Fetching iceburg tunes..." : "Sing to me, darling..."}
+                  {isLoadingBlob ? "Fetching from iceburg..." : currentBlobId ? "A chill tune awaits..." : "Sing to me, darling..."}
                 </div>
               )}
             </div>
           </div>
 
+          {/* First row of buttons - Play/Pause button */}
+          {!isLoadingBlob && (audioBlob || currentBlobId) && !isRecording && (
+            <div className="flex justify-center mb-4">
+              <button
+                onClick={togglePlayback}
+                className="bg-walrus-purple/10 hover:bg-walrus-purple/20 text-walrus-purple border border-walrus-purple font-medium py-3 px-6 rounded-md flex items-center justify-center transition-colors mx-auto w-[250px]"
+                disabled={uploading}
+              >
+                {isPlaying ? <Pause className="mr-2" /> : <Play className="mr-2" />}
+                {isPlaying ? 'Pause' : 'Tap to Play'}
+              </button>
+            </div>
+          )}
+
           {!isLoadingBlob && (
             <>
-              {/* First row of buttons */}
-              {audioBlob && !isRecording && (
-                <div className="flex justify-center mb-4">
-                  <button
-                    onClick={togglePlayback}
-                    className="bg-walrus-purple/10 hover:bg-walrus-purple/20 text-walrus-purple border border-walrus-purple font-medium py-3 px-6 rounded-md flex items-center justify-center transition-colors mx-auto w-[250px]"
-                    disabled={uploading}
-                  >
-                    {isPlaying ? <Pause className="mr-2" /> : <Play className="mr-2" />}
-                    {isPlaying ? 'Pause' : 'Play'}
-                  </button>
-                </div>
-              )}
-
-              {/* Second row of buttons */}
-              <div className="flex justify-center mb-6">
-                {!isRecording ? (
+              {/* Second row of buttons - only show Start Recording if no recording is active */}
+              {!currentBlobId && !audioBlob && !isRecording && (
+                <div className="flex justify-center mb-6">
                   <button
                     onClick={() => {
                       // Clear the URL hash before starting a new recording
@@ -1033,21 +1140,50 @@ const AudioRecorder = () => {
                     className="bg-walrus-teal/10 hover:bg-walrus-teal/20 text-walrus-teal border border-walrus-teal font-medium py-3 px-6 rounded-md flex items-center justify-center transition-colors mx-auto w-[250px]"
                     disabled={uploading}
                   >
-                    <Mic className="mr-2" /> {audioBlob ? "Start New Recording" : "Start Recording"}
+                    <Mic className="mr-2" /> Start Recording
                   </button>
-                ) : (
+                </div>
+              )}
+
+              {/* Show Stop Recording button when recording */}
+              {isRecording && (
+                <div className="flex justify-center mb-6">
                   <button
                     onClick={stopRecording}
                     className="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500 font-medium py-3 px-6 rounded-md flex items-center justify-center transition-colors mx-auto w-[250px]"
                   >
                     <Square className="mr-2" /> Stop Recording
                   </button>
-                )}
-              </div>
+                </div>
+              )}
+
+              {/* Show New Recording button when a recording is active but not recording */}
+              {(currentBlobId || audioBlob) && !isRecording && (
+                <div className="flex justify-center mb-6">
+                  <button
+                    onClick={() => {
+                      // Clear the URL hash before starting a new recording
+                      if (window.location.hash) {
+                        window.history.pushState("", document.title, window.location.pathname + window.location.search);
+                      }
+                      // Reset state
+                      setAudioBlob(null);
+                      setCurrentBlobId("");
+                      setShareLink("");
+                      // Start new recording
+                      startRecording();
+                    }}
+                    className="bg-walrus-teal/10 hover:bg-walrus-teal/20 text-walrus-teal border border-walrus-teal font-medium py-3 px-6 rounded-md flex items-center justify-center transition-colors mx-auto w-[250px]"
+                    disabled={uploading}
+                  >
+                    <Mic className="mr-2" /> Start New Recording
+                  </button>
+                </div>
+              )}
             </>
           )}
 
-          {audioBlob && !isRecording && !isLoadingBlob && (
+          {audioBlob && !isRecording && !isLoadingBlob && !shareLink && (
             <div className="flex justify-center">
               <button
                 onClick={saveRecording}
@@ -1237,3 +1373,4 @@ const App = () => {
 };
 
 export default App;
+
