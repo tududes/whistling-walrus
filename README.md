@@ -108,11 +108,119 @@ npm run build
 3. Tap "Add to Home Screen"
 4. Follow the prompts to add the app to your home screen
 
-## Deployment to Cloudflare Pages
+## Deployment Options
 
-This project includes configuration for deployment to Cloudflare Pages.
+This application can be deployed to either Walrus decentralized storage or Cloudflare Pages.
 
-### Prerequisites
+### Deployment to Walrus Decentralized Storage
+
+Walrus is a decentralized storage solution built on the Sui blockchain. Deploying to Walrus provides censorship resistance and decentralized hosting.
+
+For the most up-to-date information, refer to the [official Walrus Sites documentation](https://docs.walrus.site/walrus-sites/tutorial.html).
+
+#### Prerequisites
+
+1. Install Rust and Cargo:
+
+```bash
+curl https://sh.rustup.rs -sSf | sh -s -- -y
+source "$HOME/.cargo/env"
+```
+
+2. Install the Sui CLI:
+
+```bash
+cargo install --locked --git https://github.com/MystenLabs/sui.git --branch testnet sui --features tracing
+
+# Move the Sui binary to a location in your PATH (if needed)
+sudo mv -f $HOME/.cargo/bin/sui /usr/local/bin/
+
+# Verify installation
+sui -V
+```
+
+3. Set up a Sui wallet:
+
+```bash
+# Create a new environment and key (skip if you already have a wallet)
+sui client new-env --alias testnet --rpc https://fullnode.testnet.sui.io:443
+
+# Switch to the testnet environment
+sui client switch --env testnet
+
+# Check your active address
+sui client active-address
+```
+
+4. Get testnet SUI tokens from the faucet:
+   - Visit https://faucet.sui.io/?network=testnet
+   - Or request tokens in the Walrus Discord community
+
+5. Install the Walrus CLI:
+
+```bash
+# Download the Walrus binary
+sudo curl -L https://storage.googleapis.com/mysten-walrus-binaries/walrus-latest-ubuntu-x86_64 -o /usr/local/bin/walrus
+sudo chmod +x /usr/local/bin/walrus
+
+# Verify installation
+walrus -V
+
+# Set up Walrus configuration
+mkdir -p $HOME/.config/walrus
+curl https://raw.githubusercontent.com/MystenLabs/walrus-docs/refs/heads/main/docs/client_config.yaml \
+    -o $HOME/.config/walrus/client_config.yaml
+```
+
+6. Get WAL tokens for Walrus:
+   - Run `walrus get-wal`
+   - Or request tokens in the Walrus Discord community
+
+7. Install the site-builder tool:
+
+```bash
+SYSTEM=ubuntu-x86_64
+sudo curl https://storage.googleapis.com/mysten-walrus-binaries/site-builder-testnet-latest-$SYSTEM -o /usr/local/bin/site-builder
+sudo chmod +x /usr/local/bin/site-builder
+```
+
+#### Deployment Steps
+
+1. Build the application:
+
+```bash
+npm run build
+```
+
+2. Create a sites-config.yaml file in your home directory:
+
+```bash
+mkdir -p $HOME/walrus
+# Create the config file with your preferred editor
+# Example: nano $HOME/walrus/sites-config.yaml
+```
+
+3. Publish your site to Walrus (first-time deployment):
+
+```bash
+# Make sure you have some testnet WAL tokens before publishing
+site-builder --config $HOME/walrus/sites-config.yaml publish $HOME/whistling-walrus/dist/ --epochs 183
+```
+
+4. Update your site on Walrus (subsequent deployments):
+
+```bash
+# Make sure you have some testnet WAL tokens before updating
+site-builder --config $HOME/walrus/sites-config.yaml update $HOME/whistling-walrus/dist/ --epochs 183 0xYOUR_SITE_ID
+```
+
+Replace `0xYOUR_SITE_ID` with the site ID returned from your initial publish command.
+
+### Deployment to Cloudflare Pages
+
+Cloudflare Pages provides a fast and reliable way to deploy your application with a global CDN.
+
+#### Prerequisites
 
 1. Install Wrangler CLI:
 
@@ -126,7 +234,7 @@ npm install -g wrangler
 wrangler login
 ```
 
-### Deployment Steps
+#### Deployment Steps
 
 1. Build the application:
 
@@ -146,7 +254,7 @@ Alternatively, you can deploy manually:
 wrangler pages publish dist
 ```
 
-### Updating the Cloudflare Instance
+#### Updating the Cloudflare Instance
 
 When you make changes to the code and want to update the deployed application, follow these steps:
 
@@ -170,7 +278,7 @@ npm run deploy
 
 4. Verify your changes on the deployed site (typically available at `https://your-project-name.pages.dev`).
 
-### Continuous Deployment Workflow
+#### Continuous Deployment Workflow
 
 For a more efficient workflow when making frequent updates:
 
@@ -191,7 +299,7 @@ For a more efficient workflow when making frequent updates:
    - Push to your configured branch
    - Cloudflare automatically builds and deploys your application
 
-### Cloudflare Pages Configuration
+#### Cloudflare Pages Configuration
 
 The project includes a `cloudflare-config.js` file with the following settings:
 
@@ -200,7 +308,7 @@ The project includes a `cloudflare-config.js` file with the following settings:
 - Node.js version: 16 (minimum)
 - Routes: All routes are directed to `index.html` for SPA support
 
-### Custom Domain Setup
+#### Custom Domain Setup
 
 1. Log in to the Cloudflare dashboard
 2. Go to Pages > Your Project
