@@ -17,6 +17,7 @@ const DEFAULT_STORAGE_EPOCHS = 10; // Number of epochs to store the recording
  * @property {string} name
  * @property {number} duration
  * @property {string} timestamp
+ * @property {string} timestampWithTZ
  * @property {string} blobId
  * @property {string} mediaType
  */
@@ -973,6 +974,7 @@ const AudioRecorder = () => {
       const metadata = {
         title: finalTitle,
         timestamp: new Date().toISOString(),
+        timestampWithTZ: new Date().toString(), // Add timestamp with timezone info
         duration: finalDuration
       };
 
@@ -1007,11 +1009,13 @@ const AudioRecorder = () => {
 
           // Add the new recording to the list
           const timestamp = new Date().toISOString();
+          const timestampWithTZ = new Date().toString();
           const newRecording = {
             id: blobId,
             name: finalTitle,
             duration: recordingTime,
             timestamp,
+            timestampWithTZ,
             blobId: blobId,
             mediaType: audioBlob.type
           };
@@ -1759,6 +1763,9 @@ const AudioRecorder = () => {
                     <h3 className="font-medium text-walrus-text">{recording.name}</h3>
                     <div className="text-sm text-walrus-secondary flex items-center">
                       <Clock className="w-4 h-4 mr-1" /> {formatTime(recording.duration)}
+                    </div>
+                    <div className="text-xs text-walrus-secondary mt-1">
+                      {recording.timestampWithTZ ? recording.timestampWithTZ : new Date(recording.timestamp).toString()}
                     </div>
                   </div>
                   <div className="flex space-x-2">
