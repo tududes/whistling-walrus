@@ -279,22 +279,6 @@ const AudioRecorder = () => {
         const shareUrl = `${window.location.origin}/#${blobId}`;
         setShareLink(shareUrl);
 
-        // Try to fetch blockchain metadata for this blob
-        try {
-          const metadataResponse = await fetch(`${WALRUS_AGGREGATOR_URL}/v1/blobs/${blobId}/metadata`);
-          if (metadataResponse.ok) {
-            const metadata = await metadataResponse.json();
-            setBlockchainData(metadata);
-
-            // If the metadata contains a duration, use it
-            if (metadata.duration) {
-              setRecordingTime(Math.round(metadata.duration));
-            }
-          }
-        } catch (error) {
-          console.error("Error fetching blockchain metadata:", error);
-        }
-
         // Set loading state to false
         setIsLoadingBlob(false);
         return;
@@ -355,22 +339,6 @@ const AudioRecorder = () => {
         // Update share link using hash format
         const shareUrl = `${window.location.origin}/#${blobId}`;
         setShareLink(shareUrl);
-
-        // Try to fetch blockchain metadata for this blob
-        try {
-          const metadataResponse = await fetch(`${WALRUS_AGGREGATOR_URL}/v1/blobs/${blobId}/metadata`);
-          if (metadataResponse.ok) {
-            const metadata = await metadataResponse.json();
-            setBlockchainData(metadata);
-
-            // If the metadata contains a duration, use it (as a fallback)
-            if (metadata.duration && !audioRef.current.duration) {
-              setRecordingTime(Math.round(metadata.duration));
-            }
-          }
-        } catch (error) {
-          console.error("Error fetching blockchain metadata:", error);
-        }
 
         // Set loading state to false after everything is loaded
         setIsLoadingBlob(false);
@@ -567,33 +535,43 @@ const AudioRecorder = () => {
       const storageInfo = await storeBlob(audioBlob);
 
       if (storageInfo && storageInfo.info) {
-        // Store the blockchain response data
+        // Store the blockchain response data directly from the upload response
         setBlockchainData(storageInfo.info);
         // Automatically show the blockchain data panel
         setShowBlockchainData(true);
 
-        // Add the new recording to the list
-        const timestamp = new Date().toISOString();
-        const newRecording = {
-          id: storageInfo.info.newlyCreated?.blobObject?.blobId ||
-            storageInfo.info.alreadyCertified?.blobId ||
-            `recording-${Date.now()}`,
-          name: `Recording ${new Date().toLocaleString()}`,
-          duration: recordingTime,
-          timestamp,
-          blobId: storageInfo.info.newlyCreated?.blobObject?.blobId ||
-            storageInfo.info.alreadyCertified?.blobId || '',
-          mediaType: audioBlob.type
-        };
+        // Get the blobId from the response
+        const blobId = storageInfo.info.newlyCreated?.blobObject?.blobId ||
+          storageInfo.info.alreadyCertified?.blobId || '';
 
-        setRecordings(prev => [newRecording, ...prev]);
+        if (blobId) {
+          // Set the current blobId
+          setCurrentBlobId(blobId);
 
-        // Create shareable link using hash format instead of query parameters
-        const shareUrl = `${window.location.origin}/#${newRecording.blobId}`;
-        setShareLink(shareUrl);
+          // Add the new recording to the list
+          const timestamp = new Date().toISOString();
+          const newRecording = {
+            id: blobId,
+            name: `Recording ${new Date().toLocaleString()}`,
+            duration: recordingTime,
+            timestamp,
+            blobId: blobId,
+            mediaType: audioBlob.type
+          };
 
-        // Update the URL hash with the blob ID
-        window.location.hash = newRecording.blobId;
+          setRecordings(prev => [newRecording, ...prev]);
+
+          // Create shareable link using hash format instead of query parameters
+          const shareUrl = `${window.location.origin}/#${blobId}`;
+          setShareLink(shareUrl);
+
+          // Update the URL hash with the blob ID
+          window.location.hash = blobId;
+        } else {
+          setErrorMessage("Failed to get a valid blob ID from the storage response.");
+        }
+      } else {
+        setErrorMessage("Invalid response from storage service.");
       }
     } catch (error) {
       console.error("Error saving recording:", error);
@@ -1104,7 +1082,7 @@ const AudioRecorder = () => {
                 </div>
               ) : (
                 <div className="w-full h-24 flex items-center justify-center text-walrus-teal/50">
-                  {isLoadingBlob ? "Fetching from iceburg..." : currentBlobId ? "A chill tune awaits..." : "Sing to me, darling..."}
+                  {isLoadingBlob ? "Diving for sonic treasure..." : currentBlobId ? "Ready to catch waves?" : "Sing to me, darling!"}
                 </div>
               )}
             </div>
@@ -1227,7 +1205,7 @@ const AudioRecorder = () => {
               >
                 <span className="flex items-center">
                   <Info className="w-4 h-4 mr-2" />
-                  Walrus Blockchain Storage Information
+                  Walrus Storage Information
                 </span>
                 <span>{showBlockchainData ? '▲' : '▼'}</span>
               </button>
@@ -1253,7 +1231,7 @@ const AudioRecorder = () => {
                     {formatJSON(blockchainData)}
                   </div>
                   <div className="mt-3 text-xs text-walrus-secondary">
-                    <p>This is the raw response from the Walrus blockchain after storing your recording.</p>
+                    <p>This is the response from the Walrus storage network after storing your recording.</p>
                     <p className="mt-1">The <code className="bg-walrus-dark/50 px-1 rounded">blobId</code> is a unique identifier for your recording on the decentralized storage network.</p>
                   </div>
                 </div>
