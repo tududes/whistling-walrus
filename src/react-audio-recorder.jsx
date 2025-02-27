@@ -233,11 +233,32 @@ const AudioRecorder = () => {
 
     // Clean up audio element
     if (audioRef.current) {
-      if (audioRef.current.src) {
+      try {
+        // First pause any playback
         audioRef.current.pause();
-        URL.revokeObjectURL(audioRef.current.src);
+
+        // Reset current time
+        audioRef.current.currentTime = 0;
+
+        // Remove event listeners
+        audioRef.current.onloadedmetadata = null;
+        audioRef.current.onended = null;
+        audioRef.current.onerror = null;
+
+        // Revoke object URL if it exists
+        if (audioRef.current.src && audioRef.current.src.startsWith('blob:')) {
+          URL.revokeObjectURL(audioRef.current.src);
+        }
+
+        // Clear the source
         audioRef.current.src = '';
+
+        // Force a reload to clear any buffered data
         audioRef.current.load();
+
+        console.log("Audio element cleaned up");
+      } catch (error) {
+        console.error("Error cleaning up audio element:", error);
       }
     }
   };
@@ -684,26 +705,25 @@ const AudioRecorder = () => {
           }
         }
 
-        // Set up for new playback
+        // Set up for new playback - create a new audio URL
         if (audioRef.current.src) {
           URL.revokeObjectURL(audioRef.current.src);
         }
+
         const audioUrl = URL.createObjectURL(newBlob);
         audioRef.current.src = audioUrl;
-        console.log("Set audio source to blob URL");
+        console.log("Set audio source to blob URL:", audioUrl);
 
         // Explicitly set the MIME type
         audioRef.current.type = mimeType;
 
-        // Preload the audio - use 'auto' for better mobile compatibility
+        // Set audio attributes for better mobile compatibility
         audioRef.current.preload = 'auto';
-
-        // For iOS Safari, we need to set these attributes
-        audioRef.current.controls = true;
+        audioRef.current.controls = false;
         audioRef.current.crossOrigin = 'anonymous';
-
-        // Set playsinline attribute for iOS (important for mobile playback)
         audioRef.current.playsInline = true;
+        audioRef.current.muted = false;
+        audioRef.current.volume = 1.0;
 
         // Force load the audio to ensure it's ready for playback
         audioRef.current.load();
@@ -734,86 +754,58 @@ const AudioRecorder = () => {
 
   // Update the togglePlayback function to handle mobile browser limitations
   const togglePlayback = async () => {
-    if (isPlaying) {
-      console.log("Stopping playback");
-      audioRef.current.pause();
-      setIsPlaying(false);
-      return;
-    }
-
-    // If we don't have the audio blob yet but we have a blobId, fetch it
-    if ((!audioBlob || audioRef.current.src === '') && currentBlobId) {
-      console.log("No audio blob available or audio source not set, fetching it first");
-      await loadRecording(currentBlobId, true); // true means fetch the blob
-    } else if (!audioBlob && !currentBlobId) {
-      console.log("No audio blob available and no blobId");
-      setErrorMessage("No recording available to play");
-      return;
-    }
-
     try {
+      // If already playing, just pause
+      if (isPlaying) {
+        console.log("Stopping playback");
+        audioRef.current.pause();
+        setIsPlaying(false);
+        return;
+      }
+
       console.log("Starting playback");
       setErrorMessage(""); // Clear any previous error messages
 
-      // Make sure we have a source set
-      if (!audioRef.current.src || audioRef.current.src === '') {
-        // If there's no source set, create one from the audioBlob
-        const audioUrl = URL.createObjectURL(audioBlob);
-        audioRef.current.src = audioUrl;
-
-        // Explicitly set the MIME type if possible
-        if (audioBlob.type) {
-          audioRef.current.type = audioBlob.type;
-        }
-
-        // Reset the audio element
-        audioRef.current.currentTime = 0;
-        audioRef.current.load();
-
-        // Try to get the duration from the audio element
-        audioRef.current.addEventListener('loadedmetadata', () => {
-          if (audioRef.current.duration && !isNaN(audioRef.current.duration) && isFinite(audioRef.current.duration)) {
-            const duration = Math.round(audioRef.current.duration);
-            console.log("Setting duration from audio element:", duration);
-            setRecordingTime(duration);
-
-            // Update the recording duration in the list if it exists
-            setRecordings(prev =>
-              prev.map(rec =>
-                rec.blobId === currentBlobId
-                  ? { ...rec, duration }
-                  : rec
-              )
-            );
-          } else {
-            console.log("Invalid duration from audio element");
-          }
-        }, { once: true });
-      } else if (audioRef.current.duration && !isNaN(audioRef.current.duration) && recordingTime === 0) {
-        // If we already have a source but the recording time is not set, set it now
-        setRecordingTime(Math.round(audioRef.current.duration));
+      // If we don't have the audio blob yet but we have a blobId, fetch it
+      if ((!audioBlob || audioRef.current.src === '') && currentBlobId) {
+        console.log("No audio blob available or audio source not set, fetching it first");
+        await loadRecording(currentBlobId, true); // true means fetch the blob
+      } else if (!audioBlob && !currentBlobId) {
+        console.log("No audio blob available and no blobId");
+        setErrorMessage("No recording available to play");
+        return;
       }
 
-      // Use a try-catch specifically for the play() method
-      // This helps handle autoplay restrictions on mobile
+      // At this point we should have a valid audio blob and source
+      if (!audioRef.current.src || audioRef.current.src === '') {
+        console.error("Audio source still not available after loading");
+        setErrorMessage("Could not load audio. Please try again.");
+        return;
+      }
+
+      // Reset position to beginning
+      audioRef.current.currentTime = 0;
+
+      // Ensure volume is set
+      audioRef.current.volume = 1.0;
+      audioRef.current.muted = false;
+
+      // Set playing state first
+      setIsPlaying(true);
+
+      // Play the audio
+      console.log("Playing audio");
       try {
-        // Play the audio - this might be blocked on mobile without user interaction
-        console.log("Attempting to play audio");
         await audioRef.current.play();
-        setIsPlaying(true);
         console.log("Audio playback started successfully");
       } catch (playError) {
-        console.error("Autoplay prevented:", playError);
-
-        // On iOS Safari, we need to handle this differently
-        // The error message will guide the user to tap again
-        setErrorMessage("Please tap the play button again to start audio playback");
-
-        // For iOS Safari, we need to make sure the audio is loaded and ready
-        audioRef.current.load();
+        console.error("Playback error:", playError);
+        setIsPlaying(false);
+        setErrorMessage("Playback failed. Please try again.");
       }
     } catch (error) {
-      console.error("Error playing audio:", error);
+      console.error("Error in togglePlayback:", error);
+      setIsPlaying(false);
       setErrorMessage("Could not play the recording. Please try again.");
     }
   };
@@ -1156,7 +1148,7 @@ const AudioRecorder = () => {
     }
   }, []);
 
-  // Modify playRecording to better handle mobile browsers
+  // Simplify playRecording for better mobile compatibility
   const playRecording = async (blobId) => {
     try {
       console.log("Playing recording:", blobId);
@@ -1184,105 +1176,43 @@ const AudioRecorder = () => {
         setRecordingTitle(recording.name);
       }
 
-      // If we're playing a different recording than what's currently loaded
-      const hashBlobId = window.location.hash.substring(1);
-      if (hashBlobId !== blobId) {
-        // Clean up audio resources before loading a new recording
-        await cleanupAudioResources();
+      // Clean up audio resources before loading a new recording
+      await cleanupAudioResources();
 
-        // Just update the hash and metadata first, don't fetch the blob yet
-        await loadRecording(blobId, false);
-      }
+      // Always fetch the blob for the recording we want to play
+      console.log("Fetching recording blob");
+      await loadRecording(blobId, true); // true means fetch the blob
 
-      // Now fetch the blob if we don't have it yet
-      if (!audioBlob || currentBlobId !== blobId) {
-        console.log("No audio blob available or different recording selected, fetching it");
-        await loadRecording(blobId, true); // true means fetch the blob
-      }
-
-      // Make sure we have the recording loaded
+      // After loading, check if we have a valid audio source
       if (!audioRef.current.src || audioRef.current.src === '') {
-        // If there's no source set, create one from the audioBlob
-        if (audioBlob) {
-          const audioUrl = URL.createObjectURL(audioBlob);
-          audioRef.current.src = audioUrl;
-
-          // Explicitly set the MIME type if possible
-          if (audioBlob.type) {
-            audioRef.current.type = audioBlob.type;
-          }
-
-          // Reset the audio element
-          audioRef.current.currentTime = 0;
-          audioRef.current.load();
-
-          // Try to get the duration from the audio element
-          audioRef.current.addEventListener('loadedmetadata', () => {
-            if (audioRef.current.duration && !isNaN(audioRef.current.duration) && isFinite(audioRef.current.duration)) {
-              const duration = Math.round(audioRef.current.duration);
-              console.log("Setting duration from audio element:", duration);
-              setRecordingTime(duration);
-
-              // Update the recording duration in the list if it exists
-              setRecordings(prev =>
-                prev.map(rec =>
-                  rec.blobId === blobId
-                    ? { ...rec, duration }
-                    : rec
-                )
-              );
-            } else {
-              console.log("Invalid duration from audio element");
-            }
-          }, { once: true });
-        } else {
-          console.error("No audio blob available");
-          setErrorMessage("Audio source not available. Please try again.");
-          return;
-        }
-      } else if (audioRef.current.duration && !isNaN(audioRef.current.duration) && recordingTime === 0) {
-        // If we already have a source but the recording time is not set, set it now
-        setRecordingTime(Math.round(audioRef.current.duration));
+        console.error("Audio source not available after loading");
+        setErrorMessage("Could not load audio. Please try again.");
+        return;
       }
 
-      // For mobile browsers, we need to handle autoplay restrictions
+      // Play the audio
+      console.log("Starting playback");
       try {
-        // Reset the audio position
+        // Reset position and ensure volume
         audioRef.current.currentTime = 0;
-
-        // Set volume to ensure it's not muted
         audioRef.current.volume = 1.0;
+        audioRef.current.muted = false;
 
-        // First set the playing state to true
+        // Set playing state
         setIsPlaying(true);
 
-        // Then start the audio playback
-        console.log("Starting audio playback");
-        const playPromise = audioRef.current.play();
-
-        if (playPromise !== undefined) {
-          playPromise.then(() => {
-            console.log("Audio playback started successfully");
-          }).catch(playError => {
-            console.error("Autoplay prevented:", playError);
-            setIsPlaying(false);
-
-            // Show a more helpful message for mobile users
-            setErrorMessage("Please tap the play button again to start audio playback");
-
-            // For iOS Safari, we need to ensure the audio is ready for the next tap
-            audioRef.current.load();
-          });
-        }
+        // Play the audio
+        await audioRef.current.play();
+        console.log("Audio playback started successfully");
       } catch (playError) {
-        console.error("Error during playback attempt:", playError);
+        console.error("Playback error:", playError);
         setIsPlaying(false);
         setErrorMessage("Playback failed. Please try again.");
       }
     } catch (error) {
-      console.error("Error playing recording:", error);
-      setErrorMessage("Could not play the recording");
+      console.error("Error in playRecording:", error);
       setIsPlaying(false);
+      setErrorMessage("Could not play the recording");
     }
   };
 
@@ -1364,49 +1294,83 @@ const AudioRecorder = () => {
 
   // Add a useEffect to handle iOS Safari's specific requirements for audio playback
   useEffect(() => {
-    // Function to enable audio playback on iOS Safari
-    const enableIOSAudio = () => {
-      // Create a silent audio context and play it
-      // This "unlocks" the audio on iOS Safari
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      const silentBuffer = audioContext.createBuffer(1, 1, 22050);
-      const source = audioContext.createBufferSource();
-      source.buffer = silentBuffer;
-      source.connect(audioContext.destination);
-      source.start(0);
-      source.disconnect();
+    // Function to enable audio playback on iOS Safari and other mobile browsers
+    const enableMobileAudio = () => {
+      console.log("Enabling audio for mobile browsers");
 
-      // Also try to load and play a short silent audio
-      if (audioRef.current) {
-        const playPromise = audioRef.current.play();
+      try {
+        // Create a silent audio context and play it
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const silentBuffer = audioContext.createBuffer(1, 1, 22050);
+        const source = audioContext.createBufferSource();
+        source.buffer = silentBuffer;
+        source.connect(audioContext.destination);
+        source.start(0);
+        source.disconnect();
+
+        // Create a temporary silent audio element and play it
+        const tempAudio = document.createElement('audio');
+        tempAudio.setAttribute('playsinline', '');
+        tempAudio.muted = true;
+        tempAudio.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV6urq6urq6urq6urq6urq6urq6urq6urq6v////////////////////////////////8AAAAATGF2YzU4LjU0AAAAAAAAAAAAAAAAJAAAAAAAAAAAASDs90hvAAAAAAAAAAAAAAAAAAAA//tUZAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV';
+        tempAudio.load();
+
+        const playPromise = tempAudio.play();
         if (playPromise !== undefined) {
           playPromise.then(() => {
-            // Audio playback started successfully
-            audioRef.current.pause();
-            console.log("iOS audio unlocked");
+            console.log("Mobile audio unlocked");
+            tempAudio.remove();
           }).catch(error => {
-            // Auto-play was prevented
-            console.log("iOS audio unlock failed, will try again on next interaction");
+            console.log("Mobile audio unlock failed, will try again on next interaction");
+            tempAudio.remove();
           });
         }
+
+        // Also try to unlock our main audio element
+        if (audioRef.current) {
+          // Save the current src
+          const currentSrc = audioRef.current.src;
+
+          // Set a silent source temporarily
+          audioRef.current.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV6urq6urq6urq6urq6urq6urq6urq6urq6v////////////////////////////////8AAAAATGF2YzU4LjU0AAAAAAAAAAAAAAAAJAAAAAAAAAAAASDs90hvAAAAAAAAAAAAAAAAAAAA//tUZAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV';
+          audioRef.current.load();
+
+          const mainPlayPromise = audioRef.current.play();
+          if (mainPlayPromise !== undefined) {
+            mainPlayPromise.then(() => {
+              console.log("Main audio element unlocked");
+              // Restore the original src or clear it
+              audioRef.current.pause();
+              audioRef.current.src = currentSrc || '';
+              audioRef.current.load();
+            }).catch(error => {
+              console.log("Main audio element unlock failed");
+              // Restore the original src or clear it
+              audioRef.current.src = currentSrc || '';
+              audioRef.current.load();
+            });
+          }
+        }
+      } catch (error) {
+        console.error("Error enabling mobile audio:", error);
       }
 
       // Remove the event listeners once we've tried to unlock audio
-      document.removeEventListener('touchstart', enableIOSAudio);
-      document.removeEventListener('touchend', enableIOSAudio);
-      document.removeEventListener('click', enableIOSAudio);
+      document.removeEventListener('touchstart', enableMobileAudio);
+      document.removeEventListener('touchend', enableMobileAudio);
+      document.removeEventListener('click', enableMobileAudio);
     };
 
     // Add event listeners for user interaction
-    document.addEventListener('touchstart', enableIOSAudio, { once: true });
-    document.addEventListener('touchend', enableIOSAudio, { once: true });
-    document.addEventListener('click', enableIOSAudio, { once: true });
+    document.addEventListener('touchstart', enableMobileAudio, { once: true });
+    document.addEventListener('touchend', enableMobileAudio, { once: true });
+    document.addEventListener('click', enableMobileAudio, { once: true });
 
     return () => {
       // Clean up event listeners
-      document.removeEventListener('touchstart', enableIOSAudio);
-      document.removeEventListener('touchend', enableIOSAudio);
-      document.removeEventListener('click', enableIOSAudio);
+      document.removeEventListener('touchstart', enableMobileAudio);
+      document.removeEventListener('touchend', enableMobileAudio);
+      document.removeEventListener('click', enableMobileAudio);
     };
   }, []);
 
@@ -1689,8 +1653,17 @@ const AudioRecorder = () => {
                 className="bg-walrus-teal/10 hover:bg-walrus-teal/20 text-walrus-teal border border-walrus-teal font-medium py-2 px-6 rounded-md flex items-center justify-center transition-colors mx-auto w-[250px]"
                 disabled={uploading}
               >
-                <Save className="mr-2" />
-                {uploading ? 'Saving...' : 'Save to Walrus'}
+                {uploading ? (
+                  <>
+                    <div className="mr-2 w-4 h-4 rounded-full border-2 border-walrus-teal border-t-transparent animate-spin"></div>
+                    Saving to Walrus...
+                  </>
+                ) : (
+                  <>
+                    <Save className="mr-2" />
+                    Save to Walrus
+                  </>
+                )}
               </button>
             </div>
           )}
@@ -1823,19 +1796,42 @@ const AudioRecorder = () => {
               These ephemeral recordings will expire after 30 epochs on the Walrus blockchain.
             </span>
           </div>
-          <div className="mt-2 flex items-center">
-            <a
-              href="https://docs.walrus.site"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-walrus-teal hover:text-walrus-teal/80 flex items-center transition-colors"
-            >
-              Learn more about Walrus Storage <ExternalLink className="w-3 h-3 ml-1" />
-            </a>
-          </div>
 
           {/* GitHub Contribute Section */}
           <div className="mt-4 pt-4 border-t border-walrus-border flex items-center justify-between">
+            {/* Learn More Section with mini walrus icon */}
+            <div className="flex items-center">
+              <span className="text-walrus-secondary mr-2">Learn:</span>
+              <a
+                href="https://walrus.site"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-walrus-teal hover:text-walrus-teal/80 flex items-center transition-colors"
+                title="Visit Walrus Site"
+              >
+                <div className="w-5 h-5 mr-1">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-full h-full">
+                    <circle cx="12" cy="12" r="12" fill="#7CFBFF" />
+                    <g transform="scale(0.6) translate(8, 8)">
+                      {/* Walrus head */}
+                      <path d="M12 4C6 4 3 8 3 14C3 19 7 20 12 20C17 20 21 19 21 14C21 8 18 4 12 4Z" fill="#7CFBFF" stroke="#000" strokeWidth="1" />
+                      {/* Sunglasses */}
+                      <rect x="5" y="9" width="14" height="3" rx="0.5" fill="#000" />
+                      <rect x="5" y="9" width="6" height="3" rx="0.5" fill="#000" />
+                      <rect x="13" y="9" width="6" height="3" rx="0.5" fill="#000" />
+                      <line x1="12" y1="9" x2="12" y2="12" stroke="#7CFBFF" strokeWidth="0.5" />
+                      {/* Tusks */}
+                      <path d="M9 15C9 15 8 17 8 19C8 20 9 20 9 19C9 17 10 15 10 15" fill="#fff" stroke="#000" strokeWidth="0.5" />
+                      <path d="M15 15C15 15 16 17 16 19C16 20 15 20 15 19C15 17 14 15 14 15" fill="#fff" stroke="#000" strokeWidth="0.5" />
+                      {/* Nose */}
+                      <ellipse cx="12" cy="14.5" rx="2.5" ry="1.8" fill="#000" />
+                    </g>
+                  </svg>
+                </div>
+                <span>walrus.site</span>
+              </a>
+            </div>
+
             <div className="flex items-center space-x-6">
               <div className="flex items-center">
                 <span className="text-walrus-secondary mr-2">Contribute:</span>
@@ -1847,7 +1843,7 @@ const AudioRecorder = () => {
                   title="Contribute on GitHub"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-                    <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>
+                    <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77A5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>
                   </svg>
                 </a>
               </div>
