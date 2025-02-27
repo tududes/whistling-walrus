@@ -570,6 +570,9 @@ const AudioRecorder = () => {
       await cleanupAudioResources();
       console.log("Cleaned up audio resources");
 
+      // Reset audioBlob when loading a new recording
+      setAudioBlob(null);
+
       // Store the blobId for later use
       // This is a key change - we're not fetching the blob immediately
       if (!shouldFetchBlob) {
@@ -739,8 +742,8 @@ const AudioRecorder = () => {
     }
 
     // If we don't have the audio blob yet but we have a blobId, fetch it
-    if (!audioBlob && currentBlobId) {
-      console.log("No audio blob available, fetching it first");
+    if ((!audioBlob || audioRef.current.src === '') && currentBlobId) {
+      console.log("No audio blob available or audio source not set, fetching it first");
       await loadRecording(currentBlobId, true); // true means fetch the blob
     } else if (!audioBlob && !currentBlobId) {
       console.log("No audio blob available and no blobId");
@@ -1159,6 +1162,18 @@ const AudioRecorder = () => {
       console.log("Playing recording:", blobId);
       setErrorMessage(""); // Clear any previous error messages
 
+      // If already playing, stop first
+      if (isPlaying) {
+        audioRef.current.pause();
+        setIsPlaying(false);
+
+        // If we're clicking the same recording that's already playing, just stop it
+        if (currentBlobId === blobId) {
+          console.log("Stopping current playback of the same recording");
+          return;
+        }
+      }
+
       // Set the current blobId
       setCurrentBlobId(blobId);
 
@@ -1169,23 +1184,19 @@ const AudioRecorder = () => {
         setRecordingTitle(recording.name);
       }
 
-      // If already playing, stop first
-      if (isPlaying) {
-        audioRef.current.pause();
-        setIsPlaying(false);
-        return; // Exit early if we're just stopping playback
-      }
-
       // If we're playing a different recording than what's currently loaded
       const hashBlobId = window.location.hash.substring(1);
       if (hashBlobId !== blobId) {
+        // Clean up audio resources before loading a new recording
+        await cleanupAudioResources();
+
         // Just update the hash and metadata first, don't fetch the blob yet
         await loadRecording(blobId, false);
       }
 
       // Now fetch the blob if we don't have it yet
-      if (!audioBlob) {
-        console.log("No audio blob available, fetching it first");
+      if (!audioBlob || currentBlobId !== blobId) {
+        console.log("No audio blob available or different recording selected, fetching it");
         await loadRecording(blobId, true); // true means fetch the blob
       }
 
