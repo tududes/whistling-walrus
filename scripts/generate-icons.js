@@ -63,12 +63,30 @@ async function convertWithSharp() {
         const pngPath = path.join(__dirname, '..', 'public', 'icons', `${icon.name}.png`);
 
         try {
-            // Convert SVG to PNG with proper sizing
-            await sharp(SOURCE_SVG)
-                .resize(icon.size, icon.size, {
+            // Create a solid teal background
+            const svgBackground = `
+            <svg width="${icon.size}" height="${icon.size}" xmlns="http://www.w3.org/2000/svg">
+                <rect width="${icon.size}" height="${icon.size}" fill="#7CFBFF" />
+            </svg>`;
+
+            // Create the background
+            const background = Buffer.from(svgBackground);
+
+            // Calculate the size for the walrus to be properly centered and sized
+            const walrusSize = Math.round(icon.size * 0.85); // 85% of the icon size
+            const walrusBuffer = await sharp(SOURCE_SVG)
+                .resize(walrusSize, walrusSize, {
                     fit: 'contain',
-                    background: { r: 15, g: 23, b: 42, alpha: 1 } // #0F172A background color
+                    background: { r: 124, g: 251, b: 255, alpha: 0 } // Transparent background
                 })
+                .toBuffer();
+
+            // Composite the walrus on top of the teal background
+            await sharp(background)
+                .composite([{
+                    input: walrusBuffer,
+                    gravity: 'center'
+                }])
                 .png()
                 .toFile(pngPath);
 

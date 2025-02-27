@@ -26,9 +26,8 @@ const iconSizes = [
     { size: 512, name: 'icon-512x512' }
 ];
 
-// Background color
-const BG_COLOR = '#0F172A'; // Dark blue background
-const CIRCLE_COLOR = '#7CFBFF'; // Teal circle
+// Background color - teal color for the entire icon
+const TEAL_COLOR = '#7CFBFF';
 
 // Make sure the icons directory exists
 const iconsDir = path.join(__dirname, '..', 'public', 'icons');
@@ -42,16 +41,9 @@ async function createPNGIcon(size, outputPath) {
     const canvas = createCanvas(size, size);
     const ctx = canvas.getContext('2d');
 
-    // Fill background with dark blue
-    ctx.fillStyle = BG_COLOR;
+    // Fill the entire background with teal color
+    ctx.fillStyle = TEAL_COLOR;
     ctx.fillRect(0, 0, size, size);
-
-    // Draw a circle with the walrus teal color
-    const circleRadius = size * 0.4; // Circle takes up 80% of the icon
-    ctx.fillStyle = CIRCLE_COLOR;
-    ctx.beginPath();
-    ctx.arc(size / 2, size / 2, circleRadius, 0, Math.PI * 2);
-    ctx.fill();
 
     try {
         // Try to load the walrus SVG as an image
@@ -62,7 +54,7 @@ async function createPNGIcon(size, outputPath) {
             const walrusImage = await loadImage(walrusImagePath);
 
             // Calculate size to maintain aspect ratio
-            const walrusSize = size * 0.6; // Walrus takes up 60% of the icon
+            const walrusSize = size * 0.85; // Walrus takes up 85% of the icon
             const walrusX = (size - walrusSize) / 2;
             const walrusY = (size - walrusSize) / 2;
 
