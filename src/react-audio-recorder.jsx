@@ -569,10 +569,39 @@ const AudioRecorder = () => {
     });
   };
 
-  // Modify loadRecording to dump blob data
+  // Add a function to get a blob with MIME type override for Safari compatibility
+  const getBlob = (url) => {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.responseType = 'blob';
+      xhr.overrideMimeType('audio/mp3');
+
+      xhr.onload = () => {
+        if (xhr.status === 200) {
+          const blob = xhr.response;
+          console.log("XHR blob response type:", blob.type);
+          console.log("XHR blob size:", blob.size, "bytes");
+          resolve(blob);
+        } else {
+          reject(new Error(`Failed to fetch blob: ${xhr.status}`));
+        }
+      };
+
+      xhr.onerror = (event) => {
+        console.error("XHR error details:", event);
+        reject(event);
+      };
+
+      xhr.open('GET', url);
+      xhr.send();
+    });
+  };
+
+  // Modify loadRecording to use XHR with MIME type override by default
   const loadRecording = async (blobId, shouldFetchBlob = false) => {
     try {
       console.log("Loading recording:", blobId);
+      console.log("Browser info:", navigator.userAgent);
       setErrorMessage("");
       // Set loading state to true
       setIsLoadingBlob(true);
@@ -610,107 +639,135 @@ const AudioRecorder = () => {
       }
 
       // Only fetch the blob if shouldFetchBlob is true
-      console.log("Fetching recording from Walrus");
-      const response = await fetch(`${WALRUS_AGGREGATOR_URL}/v1/blobs/${blobId}`);
+      console.log("Fetching recording from Walrus using XHR with MIME type override");
 
-      if (response.ok) {
-        console.log("Successfully fetched recording");
-        const blob = await response.blob();
+      // Use XHR with MIME type override for all browsers (works well in Safari)
+      const blobUrl = `${WALRUS_AGGREGATOR_URL}/v1/blobs/${blobId}`;
+      const blob = await getBlob(blobUrl);
+      console.log("Successfully fetched recording");
 
-        // Dump blob data to console
-        await dumpBlobData(blob, `Fetched Blob (${blobId})`);
+      // Log blob details
+      console.log(`Blob details - Size: ${blob.size} bytes, Type: ${blob.type}`);
 
-        // Try to extract metadata from the blob
-        let title = null;
-        let duration = null;
-        let audioOnlyBlob = blob;
+      // Dump blob data to console
+      await dumpBlobData(blob, `Fetched Blob (${blobId})`);
 
-        try {
-          // Read the first part of the blob to check for metadata
-          const firstChunk = await blob.slice(0, 1000).text();
-          const firstLineEnd = firstChunk.indexOf('\n');
+      // Try to extract metadata from the blob
+      let title = null;
+      let duration = null;
+      let audioOnlyBlob = blob;
 
-          if (firstLineEnd > 0) {
-            const metadataStr = firstChunk.substring(0, firstLineEnd);
-            try {
-              const metadata = JSON.parse(metadataStr);
-              console.log("Extracted metadata:", metadata);
+      try {
+        // Read the first part of the blob to check for metadata
+        const firstChunk = await blob.slice(0, 1000).text();
+        const firstLineEnd = firstChunk.indexOf('\n');
 
-              // Extract title
-              if (metadata && metadata.title) {
-                title = metadata.title;
-                console.log("Extracted title from metadata:", title);
-                // Set the recording title
-                setRecordingTitle(title);
-              }
-
-              // Extract duration
-              if (metadata && metadata.duration && isFinite(metadata.duration)) {
-                duration = metadata.duration;
-                console.log("Extracted duration from metadata:", duration);
-                setRecordingTime(duration);
-              }
-
-              // Update the recording in the list if it exists
-              if (title) {
-                setRecordings(prev =>
-                  prev.map(rec =>
-                    rec.blobId === blobId
-                      ? { ...rec, name: title, ...(duration ? { duration } : {}) }
-                      : rec
-                  )
-                );
-              }
-
-              // Create a new blob without the metadata line
-              audioOnlyBlob = blob.slice(firstLineEnd + 1);
-            } catch (jsonError) {
-              console.log("No valid JSON metadata found in the blob:", jsonError.message);
-            }
-          }
-        } catch (metadataError) {
-          console.error("Error extracting metadata:", metadataError);
-        }
-
-        // Create a new blob with explicit MIME type for better mobile compatibility
-        // iOS Safari has better support for MP3 than WAV
-        const mimeType = blob.type || 'audio/mp3';
-        const newBlob = new Blob([audioOnlyBlob], { type: mimeType });
-        setAudioBlob(newBlob);
-        console.log("Set audio blob with type:", mimeType);
-
-        // Try to get the duration from the blob if we didn't get it from metadata
-        if (!duration) {
+        if (firstLineEnd > 0) {
+          const metadataStr = firstChunk.substring(0, firstLineEnd);
           try {
-            duration = await getAudioDuration(newBlob);
-            console.log("Got audio duration:", duration);
-            if (duration && isFinite(duration)) {
-              setRecordingTime(duration);
+            const metadata = JSON.parse(metadataStr);
+            console.log("Extracted metadata:", metadata);
 
-              // Update the recording duration in the list if it exists
+            // Extract title
+            if (metadata && metadata.title) {
+              title = metadata.title;
+              console.log("Extracted title from metadata:", title);
+              // Set the recording title
+              setRecordingTitle(title);
+            }
+
+            // Extract duration
+            if (metadata && metadata.duration && isFinite(metadata.duration)) {
+              duration = metadata.duration;
+              console.log("Extracted duration from metadata:", duration);
+              setRecordingTime(duration);
+            }
+
+            // Update the recording in the list if it exists
+            if (title) {
               setRecordings(prev =>
                 prev.map(rec =>
                   rec.blobId === blobId
-                    ? { ...rec, duration }
+                    ? { ...rec, name: title, ...(duration ? { duration } : {}) }
                     : rec
                 )
               );
-            } else {
-              console.log("Invalid duration, using 0");
-              setRecordingTime(0);
             }
-          } catch (durationError) {
-            console.error("Error getting audio duration:", durationError);
-            setRecordingTime(0);
+
+            // Create a new blob without the metadata line
+            audioOnlyBlob = blob.slice(firstLineEnd + 1);
+          } catch (jsonError) {
+            console.log("No valid JSON metadata found in the blob:", jsonError.message);
           }
         }
+      } catch (metadataError) {
+        console.error("Error extracting metadata:", metadataError);
+      }
 
-        // Set up for new playback - create a new audio URL
-        if (audioRef.current.src) {
-          URL.revokeObjectURL(audioRef.current.src);
+      // Create a new blob with explicit MIME type for better mobile compatibility
+      // iOS Safari has better support for MP3 than WAV
+      const mimeType = 'audio/mp3'; // Force audio/mp3 for Safari compatibility
+      const newBlob = new Blob([audioOnlyBlob], { type: mimeType });
+      setAudioBlob(newBlob);
+      console.log("Set audio blob with forced type:", mimeType);
+
+      // Try to get the duration from the blob if we didn't get it from metadata
+      if (!duration) {
+        try {
+          duration = await getAudioDuration(newBlob);
+          console.log("Got audio duration:", duration);
+          if (duration && isFinite(duration)) {
+            setRecordingTime(duration);
+
+            // Update the recording duration in the list if it exists
+            setRecordings(prev =>
+              prev.map(rec =>
+                rec.blobId === blobId
+                  ? { ...rec, duration }
+                  : rec
+              )
+            );
+          } else {
+            console.log("Invalid duration, using 0");
+            setRecordingTime(0);
+          }
+        } catch (durationError) {
+          console.error("Error getting audio duration:", durationError);
+          setRecordingTime(0);
         }
+      }
 
-        const audioUrl = URL.createObjectURL(newBlob);
+      // Set up for new playback - create a new audio URL
+      if (audioRef.current.src) {
+        URL.revokeObjectURL(audioRef.current.src);
+      }
+
+      const audioUrl = URL.createObjectURL(newBlob);
+      console.log("Created object URL for audio:", audioUrl);
+
+      // Check if we're on Safari
+      const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+
+      if (isSafari) {
+        console.log("Safari detected, using special audio setup");
+
+        // Create a new audio element for Safari
+        const newAudio = new Audio();
+        newAudio.src = audioUrl;
+        newAudio.type = mimeType;
+        newAudio.preload = 'auto';
+        newAudio.crossOrigin = 'anonymous';
+        newAudio.playsInline = true;
+
+        // Set up event listeners
+        newAudio.oncanplay = () => console.log("Safari: Audio can play");
+        newAudio.oncanplaythrough = () => console.log("Safari: Audio can play through");
+        newAudio.onerror = (e) => console.error("Safari: Audio error:", e);
+
+        // Replace the current audio reference
+        audioRef.current = newAudio;
+      } else {
+        // For non-Safari browsers, use the existing audio element
         audioRef.current.src = audioUrl;
         console.log("Set audio source to blob URL:", audioUrl);
 
@@ -724,27 +781,23 @@ const AudioRecorder = () => {
         audioRef.current.playsInline = true;
         audioRef.current.muted = false;
         audioRef.current.volume = 1.0;
-
-        // Force load the audio to ensure it's ready for playback
-        audioRef.current.load();
-        console.log("Loaded audio");
-
-        // Update the URL hash to reflect the current recording
-        window.location.hash = blobId;
-
-        // Update share link using hash format
-        const shareUrl = `${window.location.origin}/#${blobId}`;
-        setShareLink(shareUrl);
-
-        // Set loading state to false after everything is loaded
-        setIsLoadingBlob(false);
-      } else {
-        console.error("Failed to fetch recording:", response.status);
-        setErrorMessage(`Failed to load recording (${response.status}). Please try again.`);
-        // Set loading state to false on error
-        setIsLoadingBlob(false);
       }
+
+      // Force load the audio to ensure it's ready for playback
+      audioRef.current.load();
+      console.log("Loaded audio");
+
+      // Update the URL hash to reflect the current recording
+      window.location.hash = blobId;
+
+      // Update share link using hash format
+      const shareUrl = `${window.location.origin}/#${blobId}`;
+      setShareLink(shareUrl);
+
+      // Set loading state to false after everything is loaded
+      setIsLoadingBlob(false);
     } catch (error) {
+      // This is the main error handler for the entire function
       console.error("Error loading recording:", error);
       setErrorMessage(`Error loading recording: ${error.message}`);
       // Set loading state to false on error
@@ -793,20 +846,67 @@ const AudioRecorder = () => {
       // Set playing state first
       setIsPlaying(true);
 
-      // Play the audio
+      // Play the audio with enhanced error handling
       console.log("Playing audio");
       try {
-        await audioRef.current.play();
+        // Log audio element details before playing
+        console.log("Audio element details before play:", {
+          src: audioRef.current.src,
+          type: audioRef.current.type,
+          readyState: audioRef.current.readyState,
+          networkState: audioRef.current.networkState,
+          error: audioRef.current.error
+        });
+
+        await audioRef.current.play().catch(playError => {
+          console.error("Detailed play error:", {
+            name: playError.name,
+            message: playError.message,
+            code: playError.code,
+            stack: playError.stack
+          });
+          throw playError;
+        });
+
         console.log("Audio playback started successfully");
       } catch (playError) {
-        console.error("Playback error:", playError);
-        setIsPlaying(false);
-        setErrorMessage("Playback failed. Please try again.");
+        console.error("Error playing audio:", playError);
+
+        // Special handling for Safari's AbortError
+        if (playError.name === "AbortError") {
+          console.log("Detected Safari AbortError, trying alternative playback approach");
+
+          try {
+            // Create a new Audio element as a workaround
+            const tempAudio = new Audio();
+            tempAudio.src = audioRef.current.src;
+            tempAudio.type = 'audio/mp3';
+            tempAudio.crossOrigin = 'anonymous';
+            tempAudio.preload = 'auto';
+
+            // Set up event listeners
+            tempAudio.onplay = () => console.log("Temp audio started playing");
+            tempAudio.onerror = (e) => console.error("Temp audio error:", e);
+
+            // Try to play with the new element
+            await tempAudio.play();
+
+            // If successful, update our audio reference
+            audioRef.current = tempAudio;
+          } catch (altPlayError) {
+            console.error("Alternative playback also failed:", altPlayError);
+            setIsPlaying(false);
+            setErrorMessage("Playback failed. Please try again.");
+          }
+        } else {
+          setIsPlaying(false);
+          setErrorMessage("Playback failed. Please try again.");
+        }
       }
     } catch (error) {
       console.error("Error in togglePlayback:", error);
       setIsPlaying(false);
-      setErrorMessage("Could not play the recording. Please try again.");
+      setErrorMessage(`Playback error: ${error.message}`);
     }
   };
 
