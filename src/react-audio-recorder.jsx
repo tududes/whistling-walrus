@@ -1186,6 +1186,41 @@ const AudioRecorder = () => {
               Learn more about Walrus Storage <ExternalLink className="w-3 h-3 ml-1" />
             </a>
           </div>
+
+          {/* GitHub Contribute Section */}
+          <div className="mt-4 pt-4 border-t border-walrus-border flex items-center justify-between">
+            <div className="flex items-center space-x-6">
+              <div className="flex items-center">
+                <span className="text-walrus-secondary mr-2">Contribute:</span>
+                <a
+                  href="https://github.com/tududes/whistling-walrus"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-walrus-teal hover:text-walrus-teal/80 transition-colors"
+                  title="Contribute on GitHub"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+                    <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>
+                  </svg>
+                </a>
+              </div>
+
+              <div className="flex items-center">
+                <span className="text-walrus-secondary mr-2">Connect:</span>
+                <a
+                  href="https://x.com/0xTuDudes"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-walrus-teal hover:text-walrus-teal/80 transition-colors"
+                  title="Connect on X (formerly Twitter)"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                  </svg>
+                </a>
+              </div>
+            </div>
+          </div>
         </footer>
       </div>
     </div>
