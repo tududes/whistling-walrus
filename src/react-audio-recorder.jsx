@@ -527,7 +527,34 @@ const AudioRecorder = () => {
   };
 
   const deleteRecording = (id) => {
+    // Check if the deleted recording is the one currently in the URL hash
+    const currentBlobId = window.location.hash.substring(1);
+    const recordingToDelete = recordings.find(recording => recording.id === id);
+
+    // Remove the recording from the list
     setRecordings(prev => prev.filter(recording => recording.id !== id));
+
+    // If we're deleting the currently active recording, clear the hash and reset the UI
+    if (recordingToDelete && recordingToDelete.blobId === currentBlobId) {
+      // Clear the URL hash
+      window.history.pushState("", document.title, window.location.pathname + window.location.search);
+
+      // Reset UI state
+      setAudioBlob(null);
+      setRecordingTime(0);
+      setShareLink("");
+      setBlockchainData(null);
+      setShowBlockchainData(false);
+
+      // Stop any ongoing playback
+      if (isPlaying) {
+        audioRef.current.pause();
+        setIsPlaying(false);
+      }
+
+      // Clean up audio resources
+      cleanupAudioResources();
+    }
   };
 
   const copyShareLink = () => {
@@ -906,7 +933,13 @@ const AudioRecorder = () => {
               <div className="flex justify-center mb-6">
                 {!isRecording ? (
                   <button
-                    onClick={startRecording}
+                    onClick={() => {
+                      // Clear the URL hash before starting a new recording
+                      if (window.location.hash) {
+                        window.history.pushState("", document.title, window.location.pathname + window.location.search);
+                      }
+                      startRecording();
+                    }}
                     className="bg-walrus-teal/10 hover:bg-walrus-teal/20 text-walrus-teal border border-walrus-teal font-medium py-3 px-6 rounded-md flex items-center justify-center transition-colors mx-auto w-[250px]"
                     disabled={uploading}
                   >
