@@ -54,10 +54,27 @@ const AudioRecorder = () => {
   // Add state for recording title
   const [recordingTitle, setRecordingTitle] = useState("");
 
-  // Remove the old visualization data states
-  // const [visualizationData, setVisualizationData] = useState([]);
-  // const [recordingVisualizationData, setRecordingVisualizationData] = useState([]);
-  // const [playbackVisualizationData, setPlaybackVisualizationData] = useState([]);
+  // Add array of placeholder suggestions
+  const titlePlaceholders = [
+    "Sonic Tusk Masterpiece",
+    "Walrus Whistle Symphony",
+    "Tusked Tune #1",
+    "Aquatic Aria",
+    "Blubber Beat Remix",
+    "Whistling Walrus Wonders",
+    "Ocean Wave Opus",
+    "Arctic Anthem",
+    "Tusk Talk Episode 42"
+  ];
+
+  // Add state for current placeholder
+  const [currentPlaceholder, setCurrentPlaceholder] = useState("");
+
+  // Function to randomly select a placeholder
+  const getRandomPlaceholder = () => {
+    const randomIndex = Math.floor(Math.random() * titlePlaceholders.length);
+    return titlePlaceholders[randomIndex];
+  };
 
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -94,6 +111,9 @@ const AudioRecorder = () => {
     if (savedRecordings) {
       setRecordings(JSON.parse(savedRecordings));
     }
+
+    // Initialize random placeholder
+    setCurrentPlaceholder(getRandomPlaceholder());
 
     // Set up event listeners for audio playback
     const handleAudioEnd = () => {
@@ -802,6 +822,7 @@ const AudioRecorder = () => {
       setShareLink("");
       setErrorMessage("");
       setRecordingTitle(""); // Reset the recording title
+      setCurrentPlaceholder(getRandomPlaceholder()); // Set a new random placeholder
       audioChunksRef.current = [];
 
       // Clear the URL hash if it exists
@@ -1284,6 +1305,7 @@ const AudioRecorder = () => {
     setBlockchainData(null);
     setShowBlockchainData(false);
     setRecordingTitle(""); // Reset the recording title
+    setCurrentPlaceholder(getRandomPlaceholder()); // Set a new random placeholder
 
     // Clear the URL hash
     if (window.location.hash) {
@@ -1508,9 +1530,6 @@ const AudioRecorder = () => {
 
           {/* Audio scope visualization */}
           <div className="mb-6">
-            <h3 className="text-walrus-teal font-medium mb-2 text-center">
-              {isRecording ? "Recording Scope" : "Audio Scope"}
-            </h3>
             <div className="mx-auto w-[250px] bg-walrus-darker border border-walrus-border rounded-md overflow-hidden">
               {isRecording && mediaRecorderRef.current ? (
                 <LiveAudioVisualizer
@@ -1645,7 +1664,7 @@ const AudioRecorder = () => {
                   id="recording-title"
                   value={recordingTitle}
                   onChange={(e) => setRecordingTitle(e.target.value)}
-                  placeholder="My awesome recording"
+                  placeholder={currentPlaceholder}
                   className="w-full p-2 border border-walrus-border rounded-md bg-walrus-darker text-walrus-text focus:outline-none focus:ring-2 focus:ring-walrus-teal"
                   maxLength={50}
                 />
