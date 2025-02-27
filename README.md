@@ -11,6 +11,10 @@ A Progressive Web App (PWA) for recording audio and storing it on Walrus decentr
 - View and manage your recording history
 - Progressive Web App (PWA) support for mobile devices
 - Offline functionality
+- Cross-browser compatibility (Chrome, Firefox, Safari, Edge)
+- Responsive design for desktop and mobile
+- Custom CORS headers for API access
+- SPA routing support
 
 ## Project Setup
 
@@ -200,21 +204,54 @@ mkdir -p $HOME/walrus
 # Example: nano $HOME/walrus/sites-config.yaml
 ```
 
-3. Publish your site to Walrus (first-time deployment):
+3. Create a ws-resource.json file for configuring CORS headers and routes:
+
+```bash
+# Create the file with your preferred editor
+# Example: nano $HOME/whistling-walrus/ws-resource.json
+```
+
+Example content for ws-resource.json:
+```json
+{
+    "headers": {
+        "/*": {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization",
+            "Access-Control-Max-Age": "86400"
+        }
+    },
+    "routes": {
+        "/*": "/index.html"
+    }
+}
+```
+
+4. Publish your site to Walrus (first-time deployment):
 
 ```bash
 # Make sure you have some testnet WAL tokens before publishing
 site-builder --config $HOME/walrus/sites-config.yaml publish $HOME/whistling-walrus/dist/ --epochs 183
 ```
 
-4. Update your site on Walrus (subsequent deployments):
+5. Update your site on Walrus (subsequent deployments):
 
 ```bash
 # Make sure you have some testnet WAL tokens before updating
-site-builder --config $HOME/walrus/sites-config.yaml update $HOME/whistling-walrus/dist/ --epochs 183 0xYOUR_SITE_ID
+site-builder --config $HOME/walrus/sites-config.yaml update $HOME/whistling-walrus/dist/ --epochs 183 --ws-resources $HOME/whistling-walrus/ws-resource.json 0xYOUR_SITE_ID
 ```
 
-Replace `0xYOUR_SITE_ID` with the site ID returned from your initial publish command.
+Replace `0xYOUR_SITE_ID` with the site ID returned from your initial publish command, for example:
+```bash
+site-builder --config $HOME/walrus/sites-config.yaml update $HOME/whistling-walrus/dist/ --epochs 183 --ws-resources $HOME/whistling-walrus/ws-resource.json 0xYOUR_SITE_ID
+```
+
+The `--ws-resources` flag allows you to specify custom headers and routing rules for your deployed site, which is particularly important for supporting:
+- CORS for API access
+- SPA routing (redirecting all routes to index.html)
+- Custom caching headers
+- Security headers
 
 ### Deployment to Cloudflare Pages
 
