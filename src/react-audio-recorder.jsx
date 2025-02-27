@@ -51,6 +51,8 @@ const AudioRecorder = () => {
   const [isLoadingBlob, setIsLoadingBlob] = useState(false);
   // Add a new state variable to track when we have a valid blobId
   const [currentBlobId, setCurrentBlobId] = useState("");
+  // Add state for recording title
+  const [recordingTitle, setRecordingTitle] = useState("");
 
   // Remove the old visualization data states
   // const [visualizationData, setVisualizationData] = useState([]);
@@ -219,35 +221,313 @@ const AudioRecorder = () => {
     }
   };
 
+  // Add a specialized function to analyze WebM files
+  const analyzeWebMBlob = async (blob) => {
+    try {
+      console.log("--- WebM Analysis ---");
+
+      // Read the entire blob as an ArrayBuffer
+      const buffer = await blob.arrayBuffer();
+      const view = new Uint8Array(buffer);
+
+      // WebM is based on EBML (Extensible Binary Meta Language)
+      // We'll look for some common EBML elements
+
+      // Check for EBML header (0x1A 0x45 0xDF 0xA3)
+      if (!(view[0] === 0x1A && view[1] === 0x45 && view[2] === 0xDF && view[3] === 0xA3)) {
+        console.log("Not a valid WebM file (missing EBML header)");
+        return;
+      }
+
+      console.log("Valid WebM file with EBML header detected");
+
+      // Convert part of the buffer to a string to search for codec info
+      const headerStr = new TextDecoder().decode(view.slice(0, 500));
+
+      // Look for common WebM elements and codecs
+      if (headerStr.includes("OPUS")) {
+        console.log("Audio codec: Opus");
+      } else if (headerStr.includes("Vorbis")) {
+        console.log("Audio codec: Vorbis");
+      }
+
+      if (headerStr.includes("VP8")) {
+        console.log("Video codec: VP8");
+      } else if (headerStr.includes("VP9")) {
+        console.log("Video codec: VP9");
+      }
+
+      // Check for audio track info
+      if (headerStr.includes("Audio")) {
+        console.log("Contains audio track");
+      }
+
+      // Check for video track info
+      if (headerStr.includes("Video")) {
+        console.log("Contains video track");
+      }
+
+      // Try to extract sampling rate and channels if present
+      const samplingRateMatch = headerStr.match(/SamplingFrequency[^\d]+(\d+)/);
+      if (samplingRateMatch && samplingRateMatch[1]) {
+        console.log("Sampling rate:", samplingRateMatch[1], "Hz");
+      }
+
+      const channelsMatch = headerStr.match(/Channels[^\d]+(\d+)/);
+      if (channelsMatch && channelsMatch[1]) {
+        console.log("Channels:", channelsMatch[1]);
+      }
+
+      // Dump some key byte positions for debugging
+      console.log("Key byte positions:");
+
+      // Look for the Segment element (0x18 0x53 0x80 0x67)
+      for (let i = 4; i < Math.min(100, view.length - 4); i++) {
+        if (view[i] === 0x18 && view[i + 1] === 0x53 && view[i + 2] === 0x80 && view[i + 3] === 0x67) {
+          console.log("  Segment element at position:", i);
+          break;
+        }
+      }
+
+      // Look for the Tracks element (0x16 0x54 0xAE 0x6B)
+      for (let i = 4; i < Math.min(500, view.length - 4); i++) {
+        if (view[i] === 0x16 && view[i + 1] === 0x54 && view[i + 2] === 0xAE && view[i + 3] === 0x6B) {
+          console.log("  Tracks element at position:", i);
+          break;
+        }
+      }
+
+      // Look for the Cluster element (0x1F 0x43 0xB6 0x75)
+      for (let i = 4; i < Math.min(1000, view.length - 4); i++) {
+        if (view[i] === 0x1F && view[i + 1] === 0x43 && view[i + 2] === 0xB6 && view[i + 3] === 0x75) {
+          console.log("  First Cluster element at position:", i);
+          break;
+        }
+      }
+
+      console.log("--- End WebM Analysis ---");
+    } catch (error) {
+      console.error("Error analyzing WebM blob:", error);
+    }
+  };
+
+  // Enhance the helper function to dump blob data to the console with more detailed format analysis
+  const dumpBlobData = async (blob, label = "Blob Data") => {
+    try {
+      console.log(`--- ${label} ---`);
+      console.log("Blob type:", blob.type);
+      console.log("Blob size:", blob.size, "bytes");
+
+      // Read the first part of the blob to check for metadata
+      const firstChunk = await blob.slice(0, 1000).text();
+      console.log("First 1000 bytes:", firstChunk);
+
+      // Check for JSON metadata at the beginning
+      const firstLineEnd = firstChunk.indexOf('\n');
+      if (firstLineEnd > 0) {
+        const metadataStr = firstChunk.substring(0, firstLineEnd);
+        try {
+          const metadata = JSON.parse(metadataStr);
+          console.log("Extracted JSON metadata:", metadata);
+        } catch (jsonError) {
+          console.log("No valid JSON metadata found in the blob:", jsonError.message);
+        }
+      }
+
+      // Create a FileReader to read the blob as an ArrayBuffer for format detection
+      const bufferReader = new FileReader();
+      bufferReader.onload = async (e) => {
+        const buffer = e.target.result;
+        const view = new Uint8Array(buffer);
+
+        // Check for common audio format signatures
+        let formatInfo = "Unknown format";
+        let isWebM = false;
+
+        // WebM format detection (starts with 0x1A 0x45 0xDF 0xA3)
+        if (view[0] === 0x1A && view[1] === 0x45 && view[2] === 0xDF && view[3] === 0xA3) {
+          formatInfo = "WebM container format (likely with Opus or Vorbis audio)";
+          console.log("Format detected:", formatInfo);
+          isWebM = true;
+
+          // Look for codec info in the WebM header
+          const headerStr = new TextDecoder().decode(view.slice(0, 100));
+          if (headerStr.includes("OPUS")) {
+            console.log("Audio codec: Opus");
+          } else if (headerStr.includes("Vorbis")) {
+            console.log("Audio codec: Vorbis");
+          }
+
+          // Perform detailed WebM analysis
+          await analyzeWebMBlob(blob);
+        }
+        // MP3 format detection (starts with ID3 or 0xFF 0xFB)
+        else if (
+          (view[0] === 0x49 && view[1] === 0x44 && view[2] === 0x33) || // ID3
+          (view[0] === 0xFF && (view[1] & 0xE0) === 0xE0) // MPEG frame sync
+        ) {
+          formatInfo = "MP3 format";
+          console.log("Format detected:", formatInfo);
+        }
+        // WAV format detection (RIFF header)
+        else if (
+          view[0] === 0x52 && view[1] === 0x49 && view[2] === 0x46 && view[3] === 0x46 && // "RIFF"
+          view[8] === 0x57 && view[9] === 0x41 && view[10] === 0x56 && view[11] === 0x45 // "WAVE"
+        ) {
+          formatInfo = "WAV format";
+          console.log("Format detected:", formatInfo);
+        }
+        // Ogg format detection
+        else if (view[0] === 0x4F && view[1] === 0x67 && view[2] === 0x67 && view[3] === 0x53) {
+          formatInfo = "Ogg container format";
+          console.log("Format detected:", formatInfo);
+        } else {
+          console.log("Format detection: No standard audio format signature found");
+        }
+
+        // Dump the first 20 bytes as hex for debugging
+        let hexDump = "First 20 bytes (hex): ";
+        for (let i = 0; i < Math.min(20, view.length); i++) {
+          hexDump += view[i].toString(16).padStart(2, '0') + ' ';
+        }
+        console.log(hexDump);
+      };
+
+      // Read the blob as an ArrayBuffer for format detection
+      bufferReader.readAsArrayBuffer(blob.slice(0, 100));
+
+      // Create a FileReader to read the blob as text
+      const textReader = new FileReader();
+      textReader.onload = (e) => {
+        // Get the first 100 characters of the content for preview
+        const content = e.target.result;
+        const preview = content.length > 100 ? content.substring(0, 100) + "..." : content;
+        console.log("Content preview:", preview);
+
+        // Try to detect if it's binary data
+        const isBinary = /[\x00-\x08\x0E-\x1F]/.test(preview);
+        console.log("Is binary data:", isBinary);
+      };
+
+      // Read a small slice of the blob as text
+      textReader.readAsText(blob.slice(0, 200));
+
+      // If the blob is an audio file, try to get its duration
+      if (blob.type.startsWith('audio/') || blob.size > 1000) {
+        try {
+          const tempAudio = new Audio();
+          tempAudio.onloadedmetadata = () => {
+            console.log("Audio duration from browser:", tempAudio.duration, "seconds");
+            URL.revokeObjectURL(tempAudio.src);
+          };
+          tempAudio.onerror = () => {
+            console.log("Browser couldn't load audio for duration detection");
+            URL.revokeObjectURL(tempAudio.src);
+          };
+          tempAudio.src = URL.createObjectURL(blob);
+        } catch (audioError) {
+          console.log("Error creating audio element for duration detection:", audioError);
+        }
+      }
+
+      console.log(`--- End ${label} ---`);
+    } catch (error) {
+      console.error("Error dumping blob data:", error);
+    }
+  };
+
   // Add a function to get the duration of an audio blob
   const getAudioDuration = (blob) => {
     return new Promise((resolve, reject) => {
       try {
-        // Create a temporary audio element
-        const tempAudio = new Audio();
-        tempAudio.addEventListener('loadedmetadata', () => {
-          // Get the duration and clean up
-          const duration = Math.round(tempAudio.duration);
-          URL.revokeObjectURL(tempAudio.src);
-          resolve(duration);
-        });
+        // First check if this is a blob with metadata
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          try {
+            // Check if the blob starts with JSON metadata
+            const text = e.target.result;
+            const firstLineEnd = text.indexOf('\n');
 
-        tempAudio.addEventListener('error', (err) => {
-          URL.revokeObjectURL(tempAudio.src);
-          reject(new Error("Error loading audio: " + (err.message || "Unknown error")));
-        });
+            if (firstLineEnd > 0) {
+              const metadataStr = text.substring(0, firstLineEnd);
+              try {
+                const metadata = JSON.parse(metadataStr);
+                if (metadata && metadata.duration && isFinite(metadata.duration)) {
+                  // If we have duration in metadata, use it
+                  console.log("Using duration from metadata:", metadata.duration);
+                  resolve(metadata.duration);
+                  return;
+                }
+              } catch (jsonError) {
+                // Not valid JSON, continue to audio duration extraction
+                console.log("No valid JSON metadata found for duration");
+              }
+            }
 
-        // Load the blob
-        const audioUrl = URL.createObjectURL(blob);
-        tempAudio.src = audioUrl;
-        tempAudio.preload = 'metadata';
+            // If we don't have metadata or it doesn't have duration, use the audio element
+            // Create a temporary audio element
+            const tempAudio = new Audio();
+
+            // Set up event listeners
+            tempAudio.addEventListener('loadedmetadata', () => {
+              // Get the duration and clean up
+              const duration = tempAudio.duration;
+
+              // Check if duration is valid
+              if (duration && isFinite(duration)) {
+                const roundedDuration = Math.round(duration);
+                console.log("Got audio duration from element:", roundedDuration);
+                URL.revokeObjectURL(tempAudio.src);
+                resolve(roundedDuration);
+              } else {
+                // If duration is invalid (Infinity, NaN), use a fallback value
+                console.log("Invalid duration from audio element, using fallback");
+                URL.revokeObjectURL(tempAudio.src);
+                resolve(0); // Use 0 as a fallback
+              }
+            });
+
+            tempAudio.addEventListener('error', (err) => {
+              console.error("Error loading audio for duration:", err);
+              URL.revokeObjectURL(tempAudio.src);
+              // Use a fallback value instead of rejecting
+              resolve(0);
+            });
+
+            // Load the blob
+            const audioUrl = URL.createObjectURL(blob);
+            tempAudio.src = audioUrl;
+            tempAudio.preload = 'metadata';
+
+            // Set a timeout in case the metadata never loads
+            setTimeout(() => {
+              if (!tempAudio.duration || !isFinite(tempAudio.duration)) {
+                console.log("Timeout waiting for duration, using fallback");
+                URL.revokeObjectURL(tempAudio.src);
+                resolve(0); // Use 0 as a fallback
+              }
+            }, 3000); // 3 second timeout
+          } catch (error) {
+            console.error("Error in duration extraction:", error);
+            resolve(0); // Use 0 as a fallback instead of rejecting
+          }
+        };
+
+        reader.onerror = () => {
+          console.error("Error reading blob for duration");
+          resolve(0); // Use 0 as a fallback instead of rejecting
+        };
+
+        // Read the first 1000 bytes to check for metadata
+        reader.readAsText(blob.slice(0, 1000));
       } catch (error) {
-        reject(error);
+        console.error("Error in getAudioDuration:", error);
+        resolve(0); // Use 0 as a fallback instead of rejecting
       }
     });
   };
 
-  // Modify loadRecording to set the currentBlobId
+  // Modify loadRecording to dump blob data
   const loadRecording = async (blobId, shouldFetchBlob = false) => {
     try {
       console.log("Loading recording:", blobId);
@@ -292,20 +572,92 @@ const AudioRecorder = () => {
         console.log("Successfully fetched recording");
         const blob = await response.blob();
 
+        // Dump blob data to console
+        await dumpBlobData(blob, `Fetched Blob (${blobId})`);
+
+        // Try to extract metadata from the blob
+        let title = null;
+        let duration = null;
+        let audioOnlyBlob = blob;
+
+        try {
+          // Read the first part of the blob to check for metadata
+          const firstChunk = await blob.slice(0, 1000).text();
+          const firstLineEnd = firstChunk.indexOf('\n');
+
+          if (firstLineEnd > 0) {
+            const metadataStr = firstChunk.substring(0, firstLineEnd);
+            try {
+              const metadata = JSON.parse(metadataStr);
+              console.log("Extracted metadata:", metadata);
+
+              // Extract title
+              if (metadata && metadata.title) {
+                title = metadata.title;
+                console.log("Extracted title from metadata:", title);
+                // Set the recording title
+                setRecordingTitle(title);
+              }
+
+              // Extract duration
+              if (metadata && metadata.duration && isFinite(metadata.duration)) {
+                duration = metadata.duration;
+                console.log("Extracted duration from metadata:", duration);
+                setRecordingTime(duration);
+              }
+
+              // Update the recording in the list if it exists
+              if (title) {
+                setRecordings(prev =>
+                  prev.map(rec =>
+                    rec.blobId === blobId
+                      ? { ...rec, name: title, ...(duration ? { duration } : {}) }
+                      : rec
+                  )
+                );
+              }
+
+              // Create a new blob without the metadata line
+              audioOnlyBlob = blob.slice(firstLineEnd + 1);
+            } catch (jsonError) {
+              console.log("No valid JSON metadata found in the blob:", jsonError.message);
+            }
+          }
+        } catch (metadataError) {
+          console.error("Error extracting metadata:", metadataError);
+        }
+
         // Create a new blob with explicit MIME type for better mobile compatibility
         // iOS Safari has better support for MP3 than WAV
         const mimeType = blob.type || 'audio/mp3';
-        const newBlob = new Blob([blob], { type: mimeType });
+        const newBlob = new Blob([audioOnlyBlob], { type: mimeType });
         setAudioBlob(newBlob);
         console.log("Set audio blob with type:", mimeType);
 
-        // Try to get the duration from the blob
-        try {
-          const duration = await getAudioDuration(newBlob);
-          console.log("Got audio duration:", duration);
-          setRecordingTime(duration);
-        } catch (durationError) {
-          console.error("Error getting audio duration:", durationError);
+        // Try to get the duration from the blob if we didn't get it from metadata
+        if (!duration) {
+          try {
+            duration = await getAudioDuration(newBlob);
+            console.log("Got audio duration:", duration);
+            if (duration && isFinite(duration)) {
+              setRecordingTime(duration);
+
+              // Update the recording duration in the list if it exists
+              setRecordings(prev =>
+                prev.map(rec =>
+                  rec.blobId === blobId
+                    ? { ...rec, duration }
+                    : rec
+                )
+              );
+            } else {
+              console.log("Invalid duration, using 0");
+              setRecordingTime(0);
+            }
+          } catch (durationError) {
+            console.error("Error getting audio duration:", durationError);
+            setRecordingTime(0);
+          }
         }
 
         // Set up for new playback
@@ -396,8 +748,21 @@ const AudioRecorder = () => {
 
         // Try to get the duration from the audio element
         audioRef.current.addEventListener('loadedmetadata', () => {
-          if (audioRef.current.duration && !isNaN(audioRef.current.duration)) {
-            setRecordingTime(Math.round(audioRef.current.duration));
+          if (audioRef.current.duration && !isNaN(audioRef.current.duration) && isFinite(audioRef.current.duration)) {
+            const duration = Math.round(audioRef.current.duration);
+            console.log("Setting duration from audio element:", duration);
+            setRecordingTime(duration);
+
+            // Update the recording duration in the list if it exists
+            setRecordings(prev =>
+              prev.map(rec =>
+                rec.blobId === currentBlobId
+                  ? { ...rec, duration }
+                  : rec
+              )
+            );
+          } else {
+            console.log("Invalid duration from audio element");
           }
         }, { once: true });
       } else if (audioRef.current.duration && !isNaN(audioRef.current.duration) && recordingTime === 0) {
@@ -436,6 +801,7 @@ const AudioRecorder = () => {
       setAudioBlob(null);
       setShareLink("");
       setErrorMessage("");
+      setRecordingTitle(""); // Reset the recording title
       audioChunksRef.current = [];
 
       // Clear the URL hash if it exists
@@ -461,11 +827,14 @@ const AudioRecorder = () => {
         }
       };
 
-      mediaRecorder.onstop = () => {
+      mediaRecorder.onstop = async () => {
         // Create a blob from the audio chunks
         // Change from WAV to MP3 or WebM for better mobile compatibility
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/mp3' });
         setAudioBlob(audioBlob);
+
+        // Dump the recorded blob data
+        await dumpBlobData(audioBlob, "Recorded Audio Blob");
 
         // Set up the audio element with the new blob
         if (audioRef.current.src) {
@@ -475,6 +844,28 @@ const AudioRecorder = () => {
         audioRef.current.src = audioUrl;
         audioRef.current.type = 'audio/mp3';
         audioRef.current.load();
+
+        // Get the duration from the audio element once it's loaded
+        audioRef.current.onloadedmetadata = () => {
+          if (audioRef.current.duration && isFinite(audioRef.current.duration)) {
+            const duration = Math.round(audioRef.current.duration);
+            console.log("Setting duration from recorded audio:", duration);
+            // Update recordingTime with the actual audio duration
+            setRecordingTime(duration);
+          }
+        };
+
+        // As a backup, also try to get the duration directly from the blob
+        try {
+          const duration = await getAudioDuration(audioBlob);
+          if (duration && isFinite(duration) && duration > 0) {
+            console.log("Setting duration from blob analysis:", duration);
+            setRecordingTime(duration);
+          }
+        } catch (error) {
+          console.error("Error getting duration from blob:", error);
+          // We already have recordingTime from the timer, so this is just a backup
+        }
       };
 
       // Start recording with data available every 100ms
@@ -501,6 +892,10 @@ const AudioRecorder = () => {
 
   const stopRecording = () => {
     if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') return;
+
+    // Store the final recording time before stopping
+    const finalRecordingTime = recordingTime;
+    console.log("Final recording time from timer:", finalRecordingTime);
 
     // Stop the MediaRecorder
     mediaRecorderRef.current.stop();
@@ -531,8 +926,49 @@ const AudioRecorder = () => {
     setShowBlockchainData(false);
 
     try {
+      // Create a new blob with metadata
+      const finalTitle = recordingTitle.trim() || `Recording ${new Date().toLocaleString()}`;
+
+      // Try to get the most accurate duration from the audio element first
+      let finalDuration = recordingTime;
+
+      if (audioRef.current && audioRef.current.duration && isFinite(audioRef.current.duration)) {
+        finalDuration = Math.round(audioRef.current.duration);
+        console.log("Using audio element duration for metadata:", finalDuration);
+      } else {
+        // As a backup, try to get the duration from the blob
+        try {
+          const blobDuration = await getAudioDuration(audioBlob);
+          if (blobDuration && isFinite(blobDuration) && blobDuration > 0) {
+            finalDuration = blobDuration;
+            console.log("Using blob duration for metadata:", finalDuration);
+          }
+        } catch (error) {
+          console.log("Using timer duration for metadata:", finalDuration);
+        }
+      }
+
+      // Create a metadata object
+      const metadata = {
+        title: finalTitle,
+        timestamp: new Date().toISOString(),
+        duration: finalDuration
+      };
+
+      // Convert metadata to JSON string
+      const metadataStr = JSON.stringify(metadata);
+
+      // Create a new blob with metadata header
+      // We'll use a custom format where the first line is JSON metadata
+      // followed by a newline and then the audio data
+      const metadataBlob = new Blob([metadataStr + "\n"], { type: "application/json" });
+      const finalBlob = new Blob([metadataBlob, audioBlob], { type: audioBlob.type });
+
+      // Dump blob data to console before uploading
+      await dumpBlobData(finalBlob, "Blob Before Upload");
+
       // Upload to Walrus
-      const storageInfo = await storeBlob(audioBlob);
+      const storageInfo = await storeBlob(finalBlob);
 
       if (storageInfo && storageInfo.info) {
         // Store the blockchain response data directly from the upload response
@@ -552,7 +988,7 @@ const AudioRecorder = () => {
           const timestamp = new Date().toISOString();
           const newRecording = {
             id: blobId,
-            name: `Recording ${new Date().toLocaleString()}`,
+            name: finalTitle,
             duration: recordingTime,
             timestamp,
             blobId: blobId,
@@ -567,6 +1003,9 @@ const AudioRecorder = () => {
 
           // Update the URL hash with the blob ID
           window.location.hash = blobId;
+
+          // Reset the recording title
+          setRecordingTitle("");
         } else {
           setErrorMessage("Failed to get a valid blob ID from the storage response.");
         }
@@ -655,9 +1094,12 @@ const AudioRecorder = () => {
   // Format time in MM:SS format
   const formatTime = (seconds) => {
     // Handle invalid values
-    if (seconds === undefined || seconds === null || isNaN(seconds) || !isFinite(seconds)) {
+    if (seconds === undefined || seconds === null || isNaN(seconds) || !isFinite(seconds) || seconds < 0) {
       return "00:00";
     }
+
+    // Ensure seconds is a number and round it
+    seconds = Math.round(Number(seconds));
 
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
@@ -694,6 +1136,13 @@ const AudioRecorder = () => {
 
       // Set the current blobId
       setCurrentBlobId(blobId);
+
+      // Find the recording in our list to get its title
+      const recording = recordings.find(rec => rec.blobId === blobId);
+      if (recording && recording.name) {
+        console.log("Setting title from recording:", recording.name);
+        setRecordingTitle(recording.name);
+      }
 
       // If already playing, stop first
       if (isPlaying) {
@@ -733,8 +1182,21 @@ const AudioRecorder = () => {
 
           // Try to get the duration from the audio element
           audioRef.current.addEventListener('loadedmetadata', () => {
-            if (audioRef.current.duration && !isNaN(audioRef.current.duration)) {
-              setRecordingTime(Math.round(audioRef.current.duration));
+            if (audioRef.current.duration && !isNaN(audioRef.current.duration) && isFinite(audioRef.current.duration)) {
+              const duration = Math.round(audioRef.current.duration);
+              console.log("Setting duration from audio element:", duration);
+              setRecordingTime(duration);
+
+              // Update the recording duration in the list if it exists
+              setRecordings(prev =>
+                prev.map(rec =>
+                  rec.blobId === blobId
+                    ? { ...rec, duration }
+                    : rec
+                )
+              );
+            } else {
+              console.log("Invalid duration from audio element");
             }
           }, { once: true });
         } else {
@@ -797,7 +1259,7 @@ const AudioRecorder = () => {
     }
   };
 
-  // Update the resetForNewRecording function to clear the currentBlobId
+  // Update the resetForNewRecording function to reset the recording title
   const resetForNewRecording = async () => {
     // Stop any ongoing recording
     if (isRecording) {
@@ -821,6 +1283,7 @@ const AudioRecorder = () => {
     setErrorMessage("");
     setBlockchainData(null);
     setShowBlockchainData(false);
+    setRecordingTitle(""); // Reset the recording title
 
     // Clear the URL hash
     if (window.location.hash) {
@@ -1039,7 +1502,7 @@ const AudioRecorder = () => {
         <div className="bg-walrus-dark border border-walrus-border p-6 rounded-lg mb-8 shadow-md">
           <div className="flex justify-center items-center mb-6">
             <div className="text-5xl font-pixel font-bold text-walrus-teal">
-              {isLoadingBlob ? "00:00" : formatTime(recordingTime)}
+              {isLoadingBlob ? "00:00" : isPlaying ? formatTime(currentPlaybackTime) : formatTime(recordingTime)}
             </div>
           </div>
 
@@ -1087,6 +1550,15 @@ const AudioRecorder = () => {
               )}
             </div>
           </div>
+
+          {/* Display recording title if available */}
+          {!isRecording && recordingTitle && (audioBlob || currentBlobId) && (
+            <div className="mb-4 text-center">
+              <span className="text-walrus-teal font-medium text-sm italic">
+                "{recordingTitle}"
+              </span>
+            </div>
+          )}
 
           {/* First row of buttons - Play/Pause button */}
           {!isLoadingBlob && (audioBlob || currentBlobId) && !isRecording && (
@@ -1162,7 +1634,22 @@ const AudioRecorder = () => {
           )}
 
           {audioBlob && !isRecording && !isLoadingBlob && !shareLink && (
-            <div className="flex justify-center">
+            <div className="flex flex-col items-center">
+              {/* Add title input field */}
+              <div className="mb-4 w-[250px]">
+                <label htmlFor="recording-title" className="block text-walrus-teal text-sm font-medium mb-2">
+                  Give your recording a title:
+                </label>
+                <input
+                  type="text"
+                  id="recording-title"
+                  value={recordingTitle}
+                  onChange={(e) => setRecordingTitle(e.target.value)}
+                  placeholder="My awesome recording"
+                  className="w-full p-2 border border-walrus-border rounded-md bg-walrus-darker text-walrus-text focus:outline-none focus:ring-2 focus:ring-walrus-teal"
+                  maxLength={50}
+                />
+              </div>
               <button
                 onClick={saveRecording}
                 className="bg-walrus-teal/10 hover:bg-walrus-teal/20 text-walrus-teal border border-walrus-teal font-medium py-2 px-6 rounded-md flex items-center justify-center transition-colors mx-auto w-[250px]"
