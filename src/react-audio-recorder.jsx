@@ -106,43 +106,38 @@ const AudioRecorder = () => {
   // Add state for current playback time
   const [currentPlaybackTime, setCurrentPlaybackTime] = useState(0);
 
+  // Define audio event handlers at component level for accessibility across all functions
+  const handleAudioEnd = () => {
+    setIsPlaying(false);
+  };
+
+  const handleLoadedMetadata = () => {
+    if (audioRef.current && audioRef.current.duration) {
+      // Round to nearest second for consistency with recording timer
+      const durationInSeconds = Math.round(audioRef.current.duration);
+      setRecordingTime(durationInSeconds);
+      console.log("Audio duration loaded:", durationInSeconds);
+    }
+  };
+
   useEffect(() => {
+    // Initialize random placeholder
+    setCurrentPlaceholder(getRandomPlaceholder());
+
     // Load recordings from localStorage on component mount
     const savedRecordings = localStorage.getItem('recordings');
     if (savedRecordings) {
       setRecordings(JSON.parse(savedRecordings));
     }
 
-    // Initialize random placeholder
-    setCurrentPlaceholder(getRandomPlaceholder());
-
-    // Set up event listeners for audio playback
-    const handleAudioEnd = () => {
-      setIsPlaying(false);
-    };
-
-    // Add event listener for loadedmetadata to get audio duration
-    const handleLoadedMetadata = () => {
-      if (audioRef.current && audioRef.current.duration) {
-        // Round to nearest second for consistency with recording timer
-        const durationInSeconds = Math.round(audioRef.current.duration);
-        setRecordingTime(durationInSeconds);
-        console.log("Audio duration loaded:", durationInSeconds);
-      }
-    };
-
-    audioRef.current.addEventListener('ended', handleAudioEnd);
-    audioRef.current.addEventListener('loadedmetadata', handleLoadedMetadata);
-
     return () => {
-      // Clean up timer and audio listeners on component unmount
+      // Clean up timer on component unmount
       if (timerRef.current) clearInterval(timerRef.current);
-      audioRef.current.removeEventListener('ended', handleAudioEnd);
-      audioRef.current.removeEventListener('loadedmetadata', handleLoadedMetadata);
 
-      // Clean up audio resources
-      // Remove this call to the deleted function
-      // stopPlaybackVisualization();
+      // We no longer need to remove event listeners this way
+      // as we're now setting onended directly in the event handlers
+      // audioRef.current.removeEventListener('ended', handleAudioEnd);
+      // audioRef.current.removeEventListener('loadedmetadata', handleLoadedMetadata);
 
       // Release any media streams
       if (streamRef.current) {
@@ -745,8 +740,8 @@ const AudioRecorder = () => {
       const audioUrl = URL.createObjectURL(newBlob);
       console.log("Created object URL for audio:", audioUrl);
 
-      // Check if we're on Safari
-      const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+      // Check if we're on Safari or iOS WebKit browser
+      const isSafari = isSafariBrowser();
 
       if (isSafari) {
         console.log("Safari detected, using special audio setup");
@@ -807,10 +802,10 @@ const AudioRecorder = () => {
 
   // Update the togglePlayback function to handle mobile browser limitations
   const togglePlayback = async () => {
-    try {
-      // Ensure audio is initialized for Safari
-      initSafariAudio();
+    // Initialize audio for Safari outside of try-catch
+    initSafariAudio();
 
+    try {
       // If already playing, just pause
       if (isPlaying) {
         console.log("Stopping playback");
@@ -825,6 +820,9 @@ const AudioRecorder = () => {
         await audioRef.current.play();
         setIsPlaying(true);
 
+        // Clear any error message if playback succeeded
+        setErrorMessage("");
+
         // Handle when audio playback ends
         audioRef.current.onended = handleAudioEnd;
       } catch (error) {
@@ -832,7 +830,7 @@ const AudioRecorder = () => {
         setErrorMessage("Could not play audio. Please try again.");
       }
     } catch (error) {
-      console.error("Error playing audio:", error);
+      console.error("Error in togglePlayback:", error);
       setErrorMessage("Could not play audio. Please try again.");
     }
   };
@@ -1183,12 +1181,12 @@ const AudioRecorder = () => {
 
   // Simplify playRecording for better mobile compatibility
   const playRecording = async (blobId) => {
+    // Initialize audio specifically for Safari - outside try-catch
+    initSafariAudio();
+
     try {
       console.log("Playing recording:", blobId);
       setErrorMessage(""); // Clear any previous error messages
-
-      // Initialize audio specifically for Safari
-      initSafariAudio();
 
       // If already playing, stop first
       if (isPlaying) {
@@ -1240,6 +1238,12 @@ const AudioRecorder = () => {
         // Play the audio
         await audioRef.current.play();
         console.log("Audio playback started successfully");
+
+        // Set the onended handler
+        audioRef.current.onended = handleAudioEnd;
+
+        // Ensure error message is cleared in case it was set during initialization
+        setErrorMessage("");
       } catch (playError) {
         console.error("Playback error:", playError);
         setIsPlaying(false);
@@ -1300,13 +1304,25 @@ const AudioRecorder = () => {
     console.log("Reset for new recording");
   };
 
+  // Add a utility function to detect Safari and browsers using WebKit on iOS
+  const isSafariBrowser = () => {
+    // Check for Safari desktop
+    const isSafariDesktop = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+
+    // Check for iOS devices (which all use WebKit/Safari under the hood)
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
+    // Check for browsers using WebKit
+    const isWebKit = /AppleWebKit/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
+
+    return isSafariDesktop || isIOS || isWebKit;
+  };
+
   // Function to explicitly initialize audio for Safari
   const initSafariAudio = () => {
-    // Check if we're running in Safari
-    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-
-    if (isSafari || true) { // Try for all browsers, but especially needed for Safari
-      console.log("Initializing audio specifically for Safari");
+    // Only run full initialization for Safari browsers or iOS
+    if (isSafariBrowser()) {
+      console.log("Initializing audio specifically for Safari/iOS");
 
       try {
         // Create and immediately use an audio context
@@ -1324,18 +1340,38 @@ const AudioRecorder = () => {
 
         // Also try to initialize our main audio element
         const tempAudio = document.createElement('audio');
-        tempAudio.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV6urq6urq6urq6urq6urq6urq6urq6urq6v////////////////////////////////8AAAAATGF2YzU4LjU0AAAAAAAAAAAAAAAAJAAAAAAAAAAAASDs90hvAAAAAAAAAAAAAAAAAAAA//tUZAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV';
+        tempAudio.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV6urq6urq6urq6urq6urq6urq6urq6urq6v////////////////////////////////8AAAAATGF2YzU4LjU0AAAAAAAAAAAAAAAAJAAAAAAAAAAAASDs90hvAAAAAAAAAAAAAAAAAAAA//tUZAAP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAETEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV';
         tempAudio.load();
+
+        // For browsers that support playback without user interaction, this will unlock the audio
         const playPromise = tempAudio.play();
         if (playPromise !== undefined) {
-          playPromise.then(() => {
-            tempAudio.remove();
-          }).catch(error => {
-            tempAudio.remove();
-          });
+          playPromise
+            .then(() => {
+              console.log("Safari audio initialized successfully");
+              tempAudio.remove();
+            })
+            .catch(() => {
+              // This is expected on browsers requiring user interaction
+              // Don't log this as an error, it's a normal part of the process
+              tempAudio.remove();
+            });
         }
       } catch (error) {
+        // Log but don't bubble up the error
         console.error("Safari audio initialization failed:", error);
+      }
+    } else {
+      // For non-Safari browsers, just check if audio context exists
+      if (!audioContextRef.current) {
+        try {
+          // Create audio context if needed
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          audioContextRef.current = new AudioContext();
+        } catch (error) {
+          // Just log the error, don't throw
+          console.error("Audio context initialization failed:", error);
+        }
       }
     }
   };
